@@ -44,8 +44,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public class MercifulJsonConverter {
 
   private static final Map<Schema.Type, JsonToAvroFieldProcessor> FIELD_TYPE_PROCESSORS = getFieldTypeProcessors();
-  // For each schema, stores a mapping of schema field name to json field name to account for sanitization of fields
-  private static final Map<Schema, Map<String, String>> SANITIZED_FIELD_MAPPINGS = new ConcurrentHashMap<>();
+  // For each schema (keyed by full name), stores a mapping of schema field name to json field name to account for sanitization of fields
+  private static final Map<String, Map<String, String>> SANITIZED_FIELD_MAPPINGS = new ConcurrentHashMap<>();
 
   private final ObjectMapper mapper;
 
@@ -103,12 +103,38 @@ public class MercifulJsonConverter {
   private static GenericRecord convertJsonToAvro(Map<String, Object> inputJson, Schema schema) {
     GenericRecord avroRecord = new GenericData.Record(schema);
     for (Schema.Field f : schema.getFields()) {
-      Object val = getFieldFromJson(f.name(), inputJson, schema);
+      Object val = getFieldFromJson(f, inputJson, schema.getFullName());
       if (val != null) {
         avroRecord.put(f.pos(), convertJsonToAvroField(val, f.name(), f.schema()));
       }
     }
     return avroRecord;
+  }
+
+  private static Object getFieldFromJson(final Schema.Field fieldSchema, final Map<String, Object> inputJson, final String schemaFullName) {
+
+    Map<String, String> schemaToJsonFieldNames = SANITIZED_FIELD_MAPPINGS.computeIfAbsent(schemaFullName, unused -> new ConcurrentHashMap<>());
+    if (!schemaToJsonFieldNames.containsKey(fieldSchema.name())) {
+      // if we don't have field mapping, proactively populate as many as possible based on input json
+      for (String inputFieldName : inputJson.keySet()) {
+        // we expect many fields won't need sanitization so check if un-sanitized field name is already present
+        if (!schemaToJsonFieldNames.containsKey(inputFieldName)) {
+          String sanitizedJsonFieldName = HoodieAvroUtils.sanitizeName(inputFieldName);
+          schemaToJsonFieldNames.putIfAbsent(sanitizedJsonFieldName, inputFieldName);
+        }
+      }
+    }
+    Object match = inputJson.get(schemaToJsonFieldNames.getOrDefault(fieldSchema.name(), fieldSchema.name()));
+    if (match != null) {
+      return match;
+    }
+    // Check if there is an alias match
+    for (String alias : fieldSchema.aliases()) {
+      if (inputJson.containsKey(alias)) {
+        return inputJson.get(alias);
+      }
+    }
+    return null;
   }
 
   private static Object getFieldFromJson(final String schemaFieldName, final Map<String, Object> inputJson, final Schema schema) {

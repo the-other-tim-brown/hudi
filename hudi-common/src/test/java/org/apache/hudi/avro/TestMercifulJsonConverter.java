@@ -56,10 +56,9 @@ public class TestMercifulJsonConverter {
   }
 
   @Test
-  public void basicConfigurationWithFieldNameSanitization() throws IOException {
-    String sanitizedSchemaString = "{\"namespace\": \"example.avro\", \"type\": \"record\", \"name\": \"User\","
-        + " \"fields\": [{\"name\": \"__name\", \"type\": \"string\"}, {\"name\": \"favorite__number\",  \"type\": "
-        + "\"int\"}, {\"name\": \"favorite__color__\", \"type\": \"string\"}]}";
+  public void conversionWithFieldNameSanitization() throws IOException {
+    String sanitizedSchemaString = "{\"namespace\": \"example.avro\", \"type\": \"record\", \"name\": \"User\", \"fields\": [{\"name\": \"__name\", \"type\": \"string\"}, "
+        + "{\"name\": \"favorite__number\", \"type\": \"int\"}, {\"name\": \"favorite__color__\", \"type\": \"string\"}]}";
     Schema sanitizedSchema = Schema.parse(sanitizedSchemaString);
     String name = "John Smith";
     int number = 1337;
@@ -79,19 +78,43 @@ public class TestMercifulJsonConverter {
   }
 
   @Test
-  public void basicConversionWithMissingFields() throws IOException {
-    Schema simpleSchema = SchemaTestUtil.getSimpleSchema();
+  public void conversionWithFieldNameAliases() throws IOException {
+    String schemaStringWithAliases = "{\"namespace\": \"example.avro\", \"type\": \"record\", \"name\": \"User\", \"fields\": [{\"name\": \"name\", \"type\": \"string\", \"aliases\": [\"$name\"]}, "
+        + "{\"name\": \"favorite_number\",  \"type\": \"int\", \"aliases\": [\"unused\", \"favorite-number\"]}, {\"name\": \"favorite_color\", \"type\": \"string\", \"aliases\": "
+        + "[\"favorite.color!\"]}, {\"name\": \"unmatched\", \"type\": \"string\", \"default\": \"default_value\"}]}";
+    Schema sanitizedSchema = Schema.parse(schemaStringWithAliases);
     String name = "John Smith";
     int number = 1337;
+    String color = "Blue. No yellow!";
     Map<String, Object> data = new HashMap<>();
-    data.put("name", name);
-    data.put("favorite_number", number);
+    data.put("$name", name);
+    data.put("favorite-number", number);
+    data.put("favorite.color!", color);
     String json = MAPPER.writeValueAsString(data);
 
-    GenericRecord rec = new GenericData.Record(simpleSchema);
+    GenericRecord rec = new GenericData.Record(sanitizedSchema);
     rec.put("name", name);
     rec.put("favorite_number", number);
+    rec.put("favorite_color", color);
+    // assert that default is used
+    rec.put("unmatched", "default_value");
 
-    Assertions.assertEquals(rec, CONVERTER.convert(json, simpleSchema));
+    Assertions.assertEquals(rec, CONVERTER.convert(json, sanitizedSchema));
+  }
+
+  @Test
+  public void conversionWithDefaults() throws IOException {
+    String schemaStringWithAliases = "{\"namespace\": \"example.avro\", \"type\": \"record\", \"name\": \"User\", \"fields\": [{\"name\": \"name\", \"type\": \"string\", \"default\": \"Reginald\"}, "
+        + "{\"name\": \"favorite_number\",  \"type\": \"int\", \"default\": 42}, {\"name\": \"favorite_color\", \"type\": \"string\", \"default\": \"blue\"}]}";
+    Schema sanitizedSchema = Schema.parse(schemaStringWithAliases);
+    Map<String, Object> data = new HashMap<>();
+    String json = MAPPER.writeValueAsString(data);
+
+    GenericRecord rec = new GenericData.Record(sanitizedSchema);
+    rec.put("name", "Reginald");
+    rec.put("favorite_number", 42);
+    rec.put("favorite_color", "blue");
+
+    Assertions.assertEquals(rec, CONVERTER.convert(json, sanitizedSchema));
   }
 }
