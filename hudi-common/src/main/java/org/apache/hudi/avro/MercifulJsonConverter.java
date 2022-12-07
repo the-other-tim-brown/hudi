@@ -137,21 +137,6 @@ public class MercifulJsonConverter {
     return null;
   }
 
-  private static Object getFieldFromJson(final String schemaFieldName, final Map<String, Object> inputJson, final Schema schema) {
-    Map<String, String> schemaToJsonFieldNames = SANITIZED_FIELD_MAPPINGS.computeIfAbsent(schema, unused -> new ConcurrentHashMap<>());
-    if (!schemaToJsonFieldNames.containsKey(schemaFieldName)) {
-      // if we don't have field mapping, proactively populate as many as possible based on input json
-      for (String inputFieldName : inputJson.keySet()) {
-        // we expect many fields won't need sanitization so check if un-sanitized field name is already present
-        if (!schemaToJsonFieldNames.containsKey(inputFieldName)) {
-          String sanitizedJsonFieldName = HoodieAvroUtils.sanitizeName(inputFieldName);
-          schemaToJsonFieldNames.putIfAbsent(sanitizedJsonFieldName, inputFieldName);
-        }
-      }
-    }
-    return inputJson.get(schemaToJsonFieldNames.getOrDefault(schemaFieldName, schemaFieldName));
-  }
-
   private static Schema getNonNull(Schema schema) {
     List<Schema> types = schema.getTypes();
     Schema.Type firstType = types.get(0).getType();
