@@ -99,6 +99,7 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.metadata.TmpFileWrapper;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -457,11 +458,11 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     assertFalse(partitions.contains(filteredDirectoryThree),
         "Must not contain the filtered directory " + filteredDirectoryThree);
 
-    FileStatus[] statuses = metadata(writeConfig, context).getAllFilesInPartition(new Path(basePath, "p1"));
+    TmpFileWrapper[] statuses = metadata(writeConfig, context).getAllFilesInPartition(new Path(basePath, "p1"));
     assertEquals(tableType == COPY_ON_WRITE ? 3 : 4, statuses.length);
     statuses = metadata(writeConfig, context).getAllFilesInPartition(new Path(basePath, "p2"));
     assertEquals(tableType == COPY_ON_WRITE ? 6 : 7, statuses.length);
-    Map<String, FileStatus[]> partitionsToFilesMap = metadata(writeConfig, context).getAllFilesInPartitions(asList(basePath + "/p1", basePath + "/p2"));
+    Map<String, TmpFileWrapper[]> partitionsToFilesMap = metadata(writeConfig, context).getAllFilesInPartitions(asList(basePath + "/p1", basePath + "/p2"));
     assertEquals(2, partitionsToFilesMap.size());
     assertEquals(tableType == COPY_ON_WRITE ? 3 : 4, partitionsToFilesMap.get(basePath + "/p1").length);
     assertEquals(tableType == COPY_ON_WRITE ? 6 : 7, partitionsToFilesMap.get(basePath + "/p2").length);
@@ -3219,7 +3220,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieTable table = HoodieSparkTable.create(config, engineContext);
     TableFileSystemView tableView = table.getHoodieView();
     List<String> fullPartitionPaths = fsPartitions.stream().map(partition -> basePath + "/" + partition).collect(Collectors.toList());
-    Map<String, FileStatus[]> partitionToFilesMap = tableMetadata.getAllFilesInPartitions(fullPartitionPaths);
+    Map<String, TmpFileWrapper[]> partitionToFilesMap = tableMetadata.getAllFilesInPartitions(fullPartitionPaths);
     assertEquals(fsPartitions.size(), partitionToFilesMap.size());
 
     fsPartitions.forEach(partition -> {
@@ -3237,7 +3238,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
           fsStatuses = Arrays.stream(fsStatuses).filter(fileStatus -> !fileStatus.getPath().getName().contains(ignoreFilesWithCommit.get()))
               .collect(Collectors.toList()).toArray(new FileStatus[0]);
         }
-        FileStatus[] metaStatuses = tableMetadata.getAllFilesInPartition(partitionPath);
+        TmpFileWrapper[] metaStatuses = tableMetadata.getAllFilesInPartition(partitionPath);
         List<String> fsFileNames = Arrays.stream(fsStatuses)
             .map(s -> s.getPath().getName()).collect(Collectors.toList());
         List<String> metadataFilenames = Arrays.stream(metaStatuses)
@@ -3248,7 +3249,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         assertEquals(fsStatuses.length, partitionToFilesMap.get(partitionPath.toString()).length);
 
         // File sizes should be valid
-        Arrays.stream(metaStatuses).forEach(s -> assertTrue(s.getLen() > 0));
+        Arrays.stream(metaStatuses).forEach(s -> assertTrue(s.getFileStatus().getLen() > 0));
 
         if ((fsFileNames.size() != metadataFilenames.size()) || (!fsFileNames.equals(metadataFilenames))) {
           LOG.info("*** File system listing = " + Arrays.toString(fsFileNames.toArray()));
@@ -3267,10 +3268,10 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         }
 
         // Block sizes should be valid
-        Arrays.stream(metaStatuses).forEach(s -> assertTrue(s.getBlockSize() > 0));
+        Arrays.stream(metaStatuses).forEach(s -> assertTrue(s.getFileStatus().getBlockSize() > 0));
         List<Long> fsBlockSizes = Arrays.stream(fsStatuses).map(FileStatus::getBlockSize).collect(Collectors.toList());
         Collections.sort(fsBlockSizes);
-        List<Long> metadataBlockSizes = Arrays.stream(metaStatuses).map(FileStatus::getBlockSize).collect(Collectors.toList());
+        List<Long> metadataBlockSizes = Arrays.stream(metaStatuses).map(TmpFileWrapper::getFileStatus).map(FileStatus::getBlockSize).collect(Collectors.toList());
         Collections.sort(metadataBlockSizes);
         assertEquals(fsBlockSizes, metadataBlockSizes);
 
@@ -3387,7 +3388,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   private List<Path> getAllFiles(HoodieTableMetadata metadata) throws Exception {
     List<Path> allfiles = new LinkedList<>();
     for (String partition : metadata.getAllPartitionPaths()) {
-      for (FileStatus status : metadata.getAllFilesInPartition(new Path(basePath, partition))) {
+      for (TmpFileWrapper status : metadata.getAllFilesInPartition(new Path(basePath, partition))) {
         allfiles.add(status.getPath());
       }
     }

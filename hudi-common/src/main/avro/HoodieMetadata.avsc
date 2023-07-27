@@ -50,6 +50,18 @@
                                 "name": "isDeleted",
                                 "type": "boolean",
                                 "doc": "True if this file has been deleted"
+                            },
+                            {
+                                "name": "fileId",
+                                "type": ["null", "string"],
+                                "doc": "File Id of the file, optional for older versions of hudi",
+                                "default" : null
+                            },
+                            {
+                                "name": "commitTime",
+                                "type": ["null", "string"],
+                                "doc": "Time the file was committed, optional for older versions of hudi",
+                                "default" : null
                             }
                         ]
                     }

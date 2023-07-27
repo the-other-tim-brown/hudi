@@ -61,6 +61,7 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.metadata.TmpFileWrapper;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadStat;
@@ -526,7 +527,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness {
     HoodieTable table = HoodieSparkTable.create(writeConfig, engineContext);
     TableFileSystemView tableView = table.getHoodieView();
     List<String> fullPartitionPaths = fsPartitions.stream().map(partition -> basePath + "/" + partition).collect(Collectors.toList());
-    Map<String, FileStatus[]> partitionToFilesMap = tableMetadata.getAllFilesInPartitions(fullPartitionPaths);
+    Map<String, TmpFileWrapper[]> partitionToFilesMap = tableMetadata.getAllFilesInPartitions(fullPartitionPaths);
     assertEquals(fsPartitions.size(), partitionToFilesMap.size());
 
     fsPartitions.forEach(partition -> {
@@ -565,7 +566,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness {
   }
 
   protected void validateFilesPerPartition(HoodieTestTable testTable, HoodieTableMetadata tableMetadata, TableFileSystemView tableView,
-                                           Map<String, FileStatus[]> partitionToFilesMap, String partition) throws IOException {
+                                           Map<String, TmpFileWrapper[]> partitionToFilesMap, String partition) throws IOException {
     Path partitionPath;
     if (partition.equals("")) {
       // Should be the non-partitioned case
@@ -575,7 +576,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness {
     }
 
     FileStatus[] fsStatuses = testTable.listAllFilesInPartition(partition);
-    FileStatus[] metaStatuses = tableMetadata.getAllFilesInPartition(partitionPath);
+    FileStatus[] metaStatuses = Arrays.stream(tableMetadata.getAllFilesInPartition(partitionPath)).map(TmpFileWrapper::getFileStatus).toArray(FileStatus[]::new);
     List<String> fsFileNames = Arrays.stream(fsStatuses)
         .map(s -> s.getPath().getName()).collect(Collectors.toList());
     List<String> metadataFilenames = Arrays.stream(metaStatuses)

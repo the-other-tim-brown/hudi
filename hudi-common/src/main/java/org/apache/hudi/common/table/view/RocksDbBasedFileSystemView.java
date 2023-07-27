@@ -33,6 +33,7 @@ import org.apache.hudi.common.util.RocksDBSchemaHelper;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.RocksDBDAO;
+import org.apache.hudi.metadata.TmpFileWrapper;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -83,7 +84,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   public RocksDbBasedFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
       FileStatus[] fileStatuses, FileSystemViewStorageConfig config) {
     this(metaClient, visibleActiveTimeline, config);
-    addFilesToView(fileStatuses);
+    addFilesToView(TmpFileWrapper.fromFileStatusArray(fileStatuses));
   }
 
   @Override

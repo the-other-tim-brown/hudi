@@ -86,7 +86,7 @@ case class RepairHoodieTableCommand(tableName: TableIdentifier,
       val partitionStats = if (spark.sqlContext.conf.gatherFastStats) {
         HoodieSqlCommonUtils.getFilesInPartitions(spark, table, partitionSpecsAndLocs
           .map(_._2.toString))
-          .mapValues(statuses => PartitionStatistics(statuses.length, statuses.map(_.getLen).sum))
+          .mapValues(statuses => PartitionStatistics(statuses.length, statuses.map(_.getFileStatus.getLen).sum))
       } else {
         Map.empty[String, PartitionStatistics]
       }

@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.metadata.TmpFileWrapper;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.slf4j.Logger;
@@ -77,7 +78,7 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
   public SpillableMapBasedFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
       FileStatus[] fileStatuses, FileSystemViewStorageConfig config, HoodieCommonConfig commonConfig) {
     this(metaClient, visibleActiveTimeline, config, commonConfig);
-    addFilesToView(fileStatuses);
+    addFilesToView(TmpFileWrapper.fromFileStatusArray(fileStatuses));
   }
 
   @Override

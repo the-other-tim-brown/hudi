@@ -23,7 +23,7 @@ import org.apache.hudi.common.engine.HoodieLocalEngineContext
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.{HoodieTimer, StringUtils}
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.metadata.HoodieBackedTableMetadata
+import org.apache.hudi.metadata.{HoodieBackedTableMetadata, TmpFileWrapper}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
@@ -69,7 +69,7 @@ class ShowMetadataTableFilesProcedure() extends BaseProcedure with ProcedureBuil
     logDebug("Took " + timer.endTimer + " ms")
 
     val rows = new util.ArrayList[Row]
-    statuses.toStream.sortBy(p => p.getPath.getName).foreach((f: FileStatus) => {
+    statuses.toStream.sortBy(p => p.getPath.getName).foreach((f: TmpFileWrapper) => {
         rows.add(Row(f.getPath.getName))
     })
     rows.stream().toArray().map(r => r.asInstanceOf[Row]).toList

@@ -23,7 +23,7 @@ import org.apache.hudi.common.engine.HoodieLocalEngineContext
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.HoodieTimer
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.metadata.HoodieBackedTableMetadata
+import org.apache.hudi.metadata.{HoodieBackedTableMetadata, TmpFileWrapper}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
@@ -95,9 +95,9 @@ class ValidateMetadataTableFilesProcedure() extends BaseProcedure with Procedure
       val fileStatusMap = new util.HashMap[String, FileStatus]
       val metadataFileStatusMap = new util.HashMap[String, FileStatus]
       val metadataStatuses = metadataReader.getAllFilesInPartition(new Path(basePath, partition))
-      util.Arrays.stream(metadataStatuses).iterator().asScala.foreach((entry: FileStatus) => metadataFileStatusMap.put(entry.getPath.getName, entry))
+      util.Arrays.stream(metadataStatuses).iterator().asScala.foreach((entry: TmpFileWrapper) => metadataFileStatusMap.put(entry.getPath.getName, entry.getFileStatus))
       val fsStatuses = fsMetaReader.getAllFilesInPartition(new Path(basePath, partition))
-      util.Arrays.stream(fsStatuses).iterator().asScala.foreach((entry: FileStatus) => fileStatusMap.put(entry.getPath.getName, entry))
+      util.Arrays.stream(fsStatuses).iterator().asScala.foreach((entry: TmpFileWrapper) => fileStatusMap.put(entry.getPath.getName, entry.getFileStatus))
       val allFiles = new util.HashSet[String]
       allFiles.addAll(fileStatusMap.keySet)
       allFiles.addAll(metadataFileStatusMap.keySet)

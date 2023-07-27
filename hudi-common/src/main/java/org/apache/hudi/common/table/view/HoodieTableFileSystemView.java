@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.metadata.TmpFileWrapper;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.slf4j.Logger;
@@ -118,7 +119,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   public void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
       FileStatus[] fileStatuses) {
     init(metaClient, visibleActiveTimeline);
-    addFilesToView(fileStatuses);
+    addFilesToView(TmpFileWrapper.fromFileStatusArray(fileStatuses));
   }
 
   @Override
@@ -171,10 +172,11 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   /**
    * Create a file system view, as of the given timeline, with the provided file statuses.
    */
+  // TODO does this need to take in the wrapper object?
   public HoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
       FileStatus[] fileStatuses) {
     this(metaClient, visibleActiveTimeline);
-    addFilesToView(fileStatuses);
+    addFilesToView(TmpFileWrapper.fromFileStatusArray(fileStatuses));
   }
 
   /**

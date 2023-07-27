@@ -25,6 +25,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.index.bucket.BucketIdentifier;
+import org.apache.hudi.metadata.TmpFileWrapper;
 import org.apache.hudi.source.prune.DataPruner;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.source.prune.PrimaryKeyPruners;
@@ -151,6 +152,7 @@ public class FileIndex {
             new HoodieFlinkEngineContext(hadoopConf), metadataConfig, path.toString(), partitions)
         .values().stream()
         .flatMap(Arrays::stream)
+        .map(TmpFileWrapper::getFileStatus)
         .toArray(FileStatus[]::new);
 
     if (allFiles.length == 0) {

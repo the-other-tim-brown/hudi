@@ -37,6 +37,8 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.metadata.TmpFileWrapper;
+
 import org.apache.spark.api.java.JavaSparkContext;
 
 import org.apache.hadoop.fs.FileStatus;
@@ -256,13 +258,13 @@ public class MetadataCommand {
       }
 
       HoodieTimer timer = HoodieTimer.start();
-      FileStatus[] statuses = metaReader.getAllFilesInPartition(partitionPath);
+      TmpFileWrapper[] statuses = metaReader.getAllFilesInPartition(partitionPath);
       LOG.debug("Took " + timer.endTimer() + " ms");
 
       final List<Comparable[]> rows = new ArrayList<>();
       Arrays.stream(statuses).sorted((p1, p2) -> p2.getPath().getName().compareTo(p1.getPath().getName())).forEach(f -> {
         Comparable[] row = new Comparable[1];
-        row[0] = f;
+        row[0] = f.getFileStatus();
         rows.add(row);
       });
 
@@ -308,10 +310,10 @@ public class MetadataCommand {
     for (String partition : allPartitions) {
       Map<String, FileStatus> fileStatusMap = new HashMap<>();
       Map<String, FileStatus> metadataFileStatusMap = new HashMap<>();
-      FileStatus[] metadataStatuses = metadataReader.getAllFilesInPartition(new Path(HoodieCLI.basePath, partition));
-      Arrays.stream(metadataStatuses).forEach(entry -> metadataFileStatusMap.put(entry.getPath().getName(), entry));
-      FileStatus[] fsStatuses = fsMetaReader.getAllFilesInPartition(new Path(HoodieCLI.basePath, partition));
-      Arrays.stream(fsStatuses).forEach(entry -> fileStatusMap.put(entry.getPath().getName(), entry));
+      TmpFileWrapper[] metadataStatuses = metadataReader.getAllFilesInPartition(new Path(HoodieCLI.basePath, partition));
+      Arrays.stream(metadataStatuses).forEach(entry -> metadataFileStatusMap.put(entry.getPath().getName(), entry.getFileStatus()));
+      TmpFileWrapper[] fsStatuses = fsMetaReader.getAllFilesInPartition(new Path(HoodieCLI.basePath, partition));
+      Arrays.stream(fsStatuses).forEach(entry -> fileStatusMap.put(entry.getPath().getName(), entry.getFileStatus()));
 
       Set<String> allFiles = new HashSet<>();
       allFiles.addAll(fileStatusMap.keySet());

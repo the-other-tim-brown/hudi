@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.deltacommit;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -69,9 +70,8 @@ public class SparkUpsertDeltaCommitPartitioner<T> extends UpsertPartitioner<T> {
     for (FileSlice smallFileSlice : smallFileSlicesCandidates) {
       SmallFile sf = new SmallFile();
       if (smallFileSlice.getBaseFile().isPresent()) {
-        // TODO : Move logic of file name, file id, base commit time handling inside file slice
-        String filename = smallFileSlice.getBaseFile().get().getFileName();
-        sf.location = new HoodieRecordLocation(FSUtils.getCommitTime(filename), FSUtils.getFileId(filename));
+        HoodieBaseFile baseFile = smallFileSlice.getBaseFile().get();
+        sf.location = new HoodieRecordLocation(baseFile.getCommitTime(), baseFile.getFileId());
         sf.sizeBytes = getTotalFileSize(smallFileSlice);
         smallFileLocations.add(sf);
       } else {

@@ -19,6 +19,7 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.metadata.TmpFileWrapper;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -53,6 +54,10 @@ public class HoodieLogFile implements Serializable {
     this.fileStatus = logFile.fileStatus;
     this.pathStr = logFile.pathStr;
     this.fileLen = logFile.fileLen;
+  }
+
+  public HoodieLogFile(TmpFileWrapper fileStatus) {
+    this(fileStatus.getFileStatus());
   }
 
   public HoodieLogFile(FileStatus fileStatus) {

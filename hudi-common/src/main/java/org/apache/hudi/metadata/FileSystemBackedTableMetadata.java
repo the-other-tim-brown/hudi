@@ -26,8 +26,8 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -93,9 +93,10 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
   }
 
   @Override
-  public FileStatus[] getAllFilesInPartition(Path partitionPath) throws IOException {
+  public TmpFileWrapper[] getAllFilesInPartition(Path partitionPath) throws IOException {
     FileSystem fs = partitionPath.getFileSystem(hadoopConf.get());
-    return FSUtils.getAllDataFilesInPartition(fs, partitionPath);
+    return null;
+    //return FSUtils.getAllDataFilesInPartition(fs, partitionPath);
   }
 
   @Override
@@ -224,7 +225,7 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
   }
 
   @Override
-  public Map<String, FileStatus[]> getAllFilesInPartitions(Collection<String> partitionPaths)
+  public Map<String, TmpFileWrapper[]> getAllFilesInPartitions(Collection<String> partitionPaths)
       throws IOException {
     if (partitionPaths == null || partitionPaths.isEmpty()) {
       return Collections.emptyMap();
@@ -239,7 +240,8 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
       return Pair.of(partitionPathStr, FSUtils.getAllDataFilesInPartition(fs, partitionPath));
     }, parallelism);
 
-    return partitionToFiles.stream().collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
+    return null;
+    //return partitionToFiles.stream().collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
   }
 
   @Override

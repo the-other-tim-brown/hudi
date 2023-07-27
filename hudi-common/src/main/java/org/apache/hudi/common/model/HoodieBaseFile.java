@@ -20,6 +20,7 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.metadata.TmpFileWrapper;
 
 import org.apache.hadoop.fs.FileStatus;
 
@@ -34,6 +35,10 @@ public class HoodieBaseFile extends BaseFile {
   public HoodieBaseFile(HoodieBaseFile dataFile) {
     super(dataFile);
     this.bootstrapBaseFile = dataFile.bootstrapBaseFile;
+  }
+
+  public HoodieBaseFile(TmpFileWrapper dataFile) {
+    this(dataFile.getFileStatus(), null);
   }
 
   public HoodieBaseFile(FileStatus fileStatus) {

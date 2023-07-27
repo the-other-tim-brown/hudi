@@ -35,6 +35,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -481,10 +482,10 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // Collect the list of latest base files present in each partition
     List<String> partitions = metadata.getAllPartitionPaths();
     fsView.loadAllPartitions();
-    final List<Pair<String, String>> partitionBaseFilePairs = new ArrayList<>();
+    final List<Pair<String, HoodieBaseFile>> partitionBaseFilePairs = new ArrayList<>();
     for (String partition : partitions) {
       partitionBaseFilePairs.addAll(fsView.getLatestBaseFiles(partition)
-          .map(basefile -> Pair.of(partition, basefile.getFileName())).collect(Collectors.toList()));
+          .map(basefile -> Pair.of(partition, basefile)).collect(Collectors.toList()));
     }
 
     LOG.info("Initializing record index from " + partitionBaseFilePairs.size() + " base files in "
@@ -509,7 +510,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * Read the record keys from base files in partitions and return records.
    */
   private HoodieData<HoodieRecord> readRecordKeysFromBaseFiles(HoodieEngineContext engineContext,
-                                                               List<Pair<String, String>> partitionBaseFilePairs,
+                                                               List<Pair<String, HoodieBaseFile>> partitionBaseFilePairs,
                                                                boolean forDelete) {
     if (partitionBaseFilePairs.isEmpty()) {
       return engineContext.emptyHoodieData();
@@ -519,11 +520,11 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     final int parallelism = Math.min(partitionBaseFilePairs.size(), dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism());
     return engineContext.parallelize(partitionBaseFilePairs, parallelism).flatMap(p -> {
       final String partition = p.getKey();
-      final String filename = p.getValue();
+      final String filename = p.getValue().getFileName();
       Path dataFilePath = new Path(dataWriteConfig.getBasePath(), partition + Path.SEPARATOR + filename);
 
-      final String fileId = FSUtils.getFileId(filename);
-      final String instantTime = FSUtils.getCommitTime(filename);
+      final String fileId = p.getValue().getFileId();
+      final String instantTime = p.getValue().getCommitTime();
       HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(hadoopConf.get(), dataFilePath);
       ClosableIterator<String> recordKeyIterator = reader.getRecordKeyIterator();
 
@@ -568,8 +569,11 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     engineContext.setJobStatus(this.getClass().getSimpleName(), "Creating records for metadata FILES partition");
     HoodieData<HoodieRecord> fileListRecords = engineContext.parallelize(partitionInfoList, partitionInfoList.size()).map(partitionInfo -> {
       Map<String, Long> fileNameToSizeMap = partitionInfo.getFileNameToSizeMap();
+      List<HoodieMetadataPayload.FileUpdate> fileUpdates = fileNameToSizeMap.entrySet().stream()
+          .map(entry -> HoodieMetadataPayload.FileUpdate.forAdd(entry.getKey(), "fileId", "commitTime", entry.getValue()))
+          .collect(Collectors.toList());
       return HoodieMetadataPayload.createPartitionFilesRecord(
-          HoodieTableMetadataUtil.getPartitionIdentifier(partitionInfo.getRelativePath()), Option.of(fileNameToSizeMap), Option.empty());
+          HoodieTableMetadataUtil.getPartitionIdentifier(partitionInfo.getRelativePath()),fileUpdates);
     });
     ValidationUtils.checkState(fileListRecords.count() == partitions.size());
 
@@ -632,7 +636,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       List<DirectoryInfo> processedDirectories = engineContext.map(pathsToList.subList(0, numDirsToList), path -> {
         FileSystem fs = path.get().getFileSystem(conf.get());
         String relativeDirPath = FSUtils.getRelativePartitionPath(serializableBasePath.get(), path.get());
-        return new DirectoryInfo(relativeDirPath, fs.listStatus(path.get()), initializationTime);
+        return new DirectoryInfo(relativeDirPath, TmpFileWrapper.fromFileStatusArray(fs.listStatus(path.get())), initializationTime);
       }, numDirsToList);
 
       pathsToList = new LinkedList<>(pathsToList.subList(numDirsToList, pathsToList.size()));
@@ -673,8 +677,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     List<DirectoryInfo> dirinfoList = new LinkedList<>();
     List<String> allPartitionPaths = metadata.getAllPartitionPaths().stream()
         .map(partitionPath -> dataWriteConfig.getBasePath() + "/" + partitionPath).collect(Collectors.toList());
-    Map<String, FileStatus[]> partitionFileMap = metadata.getAllFilesInPartitions(allPartitionPaths);
-    for (Map.Entry<String, FileStatus[]> entry : partitionFileMap.entrySet()) {
+    Map<String, TmpFileWrapper[]> partitionFileMap = metadata.getAllFilesInPartitions(allPartitionPaths);
+    for (Map.Entry<String, TmpFileWrapper[]> entry : partitionFileMap.entrySet()) {
       dirinfoList.add(new DirectoryInfo(entry.getKey(), entry.getValue(), initializationTime));
     }
     return dirinfoList;
@@ -1264,7 +1268,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         partitionPath = new Path(dataWriteConfig.getBasePath(), partition);
       }
       final String partitionId = HoodieTableMetadataUtil.getPartitionIdentifier(partition);
-      FileStatus[] metadataFiles = metadata.getAllFilesInPartition(partitionPath);
+      TmpFileWrapper[] metadataFiles = metadata.getAllFilesInPartition(partitionPath);
       if (!dirInfoMap.containsKey(partition)) {
         // Entire partition has been deleted
         partitionsToDelete.add(partitionId);
@@ -1363,10 +1367,10 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   private HoodieData<HoodieRecord> getRecordIndexReplacedRecords(HoodieReplaceCommitMetadata replaceCommitMetadata) {
     final HoodieMetadataFileSystemView fsView = new HoodieMetadataFileSystemView(dataMetaClient,
         dataMetaClient.getActiveTimeline(), metadata);
-    List<Pair<String, String>> partitionBaseFilePairs = replaceCommitMetadata
+    List<Pair<String, HoodieBaseFile>> partitionBaseFilePairs = replaceCommitMetadata
         .getPartitionToReplaceFileIds()
         .keySet().stream().flatMap(partition
-            -> fsView.getLatestBaseFiles(partition).map(f -> Pair.of(partition, f.getFileName())))
+            -> fsView.getLatestBaseFiles(partition).map(f -> Pair.of(partition, f)))
         .collect(Collectors.toList());
 
     return readRecordKeysFromBaseFiles(engineContext, partitionBaseFilePairs, true);
@@ -1431,13 +1435,14 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // Is this a hoodie partition
     private boolean isHoodiePartition = false;
 
-    public DirectoryInfo(String relativePath, FileStatus[] fileStatus, String maxInstantTime) {
+    public DirectoryInfo(String relativePath, TmpFileWrapper[] fileStatus, String maxInstantTime) {
       this.relativePath = relativePath;
 
       // Pre-allocate with the maximum length possible
       filenameToSizeMap = new HashMap<>(fileStatus.length);
 
-      for (FileStatus status : fileStatus) {
+      for (TmpFileWrapper wrapper : fileStatus) {
+        FileStatus status = wrapper.getFileStatus();
         if (status.isDirectory()) {
           // Ignore .hoodie directory as there cannot be any partitions inside it
           if (!status.getPath().getName().equals(HoodieTableMetaClient.METAFOLDER_NAME)) {
@@ -1446,9 +1451,9 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         } else if (status.getPath().getName().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX)) {
           // Presence of partition meta file implies this is a HUDI partition
           this.isHoodiePartition = true;
-        } else if (FSUtils.isDataFile(status.getPath())) {
+        } else if (wrapper.isDataFile()) {
           // Regular HUDI data file (base file or log file)
-          String dataFileCommitTime = FSUtils.getCommitTime(status.getPath().getName());
+          String dataFileCommitTime = wrapper.getCommitTime();
           // Limit the file listings to files which were created before the maxInstant time.
           if (HoodieTimeline.compareTimestamps(dataFileCommitTime, HoodieTimeline.LESSER_THAN_OR_EQUALS, maxInstantTime)) {
             filenameToSizeMap.put(status.getPath().getName(), status.getLen());

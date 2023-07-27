@@ -26,7 +26,6 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
@@ -63,7 +62,7 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
    * @throws IOException
    */
   @Override
-  protected FileStatus[] listPartition(Path partitionPath) throws IOException {
+  protected TmpFileWrapper[] listPartition(Path partitionPath) throws IOException {
     return tableMetadata.getAllFilesInPartition(partitionPath);
   }
 
@@ -73,7 +72,7 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
   }
   
   @Override
-  protected Map<Pair<String, Path>, FileStatus[]> listPartitions(List<Pair<String, Path>> partitionPathList) throws IOException {
+  protected Map<Pair<String, Path>, TmpFileWrapper[]> listPartitions(List<Pair<String, Path>> partitionPathList) throws IOException {
     Map<String, Pair<String, Path>> absoluteToPairMap = partitionPathList.stream()
         .collect(Collectors.toMap(
             pair -> pair.getRight().toString(),

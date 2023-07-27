@@ -63,6 +63,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
 import javax.annotation.Nullable;
+
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
@@ -79,7 +80,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.UUID;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -234,7 +234,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
           filesystemMetadata = metadata;
           filesystemMetadata.keySet().forEach(k -> {
             GenericRecord v = filesystemMetadata.get(k);
-            filesystemMetadata.put(k, new HoodieMetadataFileInfo((Long) v.get("size"), (Boolean) v.get("isDeleted")));
+            filesystemMetadata.put(k, new HoodieMetadataFileInfo((Long) v.get("size"), (Boolean) v.get("isDeleted"), (String) v.get("fileId"), (String) v.get("commitTime")));
           });
         }
       } else if (type == METADATA_TYPE_BLOOM_FILTER) {
@@ -335,7 +335,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    */
   public static HoodieRecord<HoodieMetadataPayload> createPartitionListRecord(List<String> partitions, boolean isDeleted) {
     Map<String, HoodieMetadataFileInfo> fileInfo = new HashMap<>();
-    partitions.forEach(partition -> fileInfo.put(getPartitionIdentifier(partition), new HoodieMetadataFileInfo(0L, isDeleted)));
+    partitions.forEach(partition -> fileInfo.put(getPartitionIdentifier(partition), new HoodieMetadataFileInfo(0L, isDeleted, null, null)));
 
     HoodieKey key = new HoodieKey(RECORDKEY_PARTITION_LIST, MetadataPartitionType.FILES.getPartitionPath());
     HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_PARTITION_LIST,
@@ -351,29 +351,68 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    * @param filesDeleted List of files which have been deleted from this partition
    */
   public static HoodieRecord<HoodieMetadataPayload> createPartitionFilesRecord(String partition,
-                                                                               Option<Map<String, Long>> filesAdded,
-                                                                               Option<List<String>> filesDeleted) {
-    Map<String, HoodieMetadataFileInfo> fileInfo = new HashMap<>();
-    filesAdded.ifPresent(filesMap ->
-        fileInfo.putAll(
-            filesMap.entrySet().stream().collect(
-                Collectors.toMap(Map.Entry::getKey, (entry) -> {
-                  long fileSize = entry.getValue();
-                  // Assert that the file-size of the file being added is positive, since Hudi
-                  // should not be creating empty files
-                  checkState(fileSize > 0);
-                  return new HoodieMetadataFileInfo(fileSize, false);
-                })))
-    );
-    filesDeleted.ifPresent(filesList ->
-        fileInfo.putAll(
-            filesList.stream().collect(
-                Collectors.toMap(Function.identity(), (ignored) -> new HoodieMetadataFileInfo(0L, true))))
-    );
+                                                                               List<FileUpdate> fileUpdates) {
+    Map<String, HoodieMetadataFileInfo> fileInfo = fileUpdates.stream()
+            .map(fileUpdate -> {
+              if (!fileUpdate.isDeleted()) {
+                long fileSize = fileUpdate.getFileSize();
+                // Assert that the file-size of the file being added is positive, since Hudi
+                // should not be creating empty files
+                checkState(fileSize > 0);
+              }
+              return fileUpdate;
+            }).collect(Collectors.toMap(FileUpdate::getFilePath, fileUpdate -> {
+              // TODO add correct values for commit time and file ID
+              return new HoodieMetadataFileInfo(fileUpdate.getFileSize(), fileUpdate.isDeleted(), fileUpdate.getFileId(), fileUpdate.getCommitTime());
+            }));
 
     HoodieKey key = new HoodieKey(partition, MetadataPartitionType.FILES.getPartitionPath());
     HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_FILE_LIST, fileInfo);
     return new HoodieAvroRecord<>(key, payload);
+  }
+
+  public static class FileUpdate {
+    private final String filePath;
+    private final String fileId;
+    private final String commitTime;
+    private final long fileSize;
+    private final boolean isDeleted;
+
+    private FileUpdate(String filePath, String fileId, String commitTime, long fileSize, boolean isDeleted) {
+      this.filePath = filePath;
+      this.fileId = fileId;
+      this.commitTime = commitTime;
+      this.fileSize = fileSize;
+      this.isDeleted = isDeleted;
+    }
+
+    public static FileUpdate forDelete(String filePath, String fileId, String commitTime) {
+      return new FileUpdate(filePath, fileId, commitTime, 0, true);
+    }
+
+    public static FileUpdate forAdd(String filePath, String fileId, String commitTime, long fileSize) {
+      return new FileUpdate(filePath, fileId, commitTime, fileSize, false);
+    }
+
+    public String getFilePath() {
+      return filePath;
+    }
+
+    public String getFileId() {
+      return fileId;
+    }
+
+    public String getCommitTime() {
+      return commitTime;
+    }
+
+    public long getFileSize() {
+      return fileSize;
+    }
+
+    public boolean isDeleted() {
+      return isDeleted;
+    }
   }
 
   /**
@@ -527,7 +566,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   /**
    * Returns the files added as part of this record.
    */
-  public FileStatus[] getFileStatuses(Configuration hadoopConf, Path partitionPath) throws IOException {
+  public TmpFileWrapper[] getFileStatuses(Configuration hadoopConf, Path partitionPath) throws IOException {
     FileSystem fs = partitionPath.getFileSystem(hadoopConf);
     return getFileStatuses(fs, partitionPath);
   }
@@ -535,17 +574,19 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   /**
    * Returns the files added as part of this record.
    */
-  public FileStatus[] getFileStatuses(FileSystem fs, Path partitionPath) {
+  public TmpFileWrapper[] getFileStatuses(FileSystem fs, Path partitionPath) {
     long blockSize = fs.getDefaultBlockSize(partitionPath);
     return filterFileInfoEntries(false)
         .map(e -> {
           // NOTE: Since we know that the Metadata Table's Payload is simply a file-name we're
           //       creating Hadoop's Path using more performant unsafe variant
           CachingPath filePath = new CachingPath(partitionPath, createRelativePathUnsafe(e.getKey()));
-          return new FileStatus(e.getValue().getSize(), false, 0, blockSize, 0, 0,
+          HoodieMetadataFileInfo metadataFileInfo = e.getValue();
+          FileStatus fileStatus = new FileStatus(e.getValue().getSize(), false, 0, blockSize, 0, 0,
               null, null, null, filePath);
+          return new TmpFileWrapper(fileStatus, metadataFileInfo.getCommitTime(), metadataFileInfo.getFileId());
         })
-        .toArray(FileStatus[]::new);
+        .toArray(TmpFileWrapper[]::new);
   }
 
   private Stream<Map.Entry<String, HoodieMetadataFileInfo>> filterFileInfoEntries(boolean isDeleted) {
@@ -602,7 +643,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
                 //          currently)
                 newFileInfo.getIsDeleted()
                     ? null
-                    : new HoodieMetadataFileInfo(Math.max(newFileInfo.getSize(), oldFileInfo.getSize()), false));
+                    : new HoodieMetadataFileInfo(Math.max(newFileInfo.getSize(), oldFileInfo.getSize()), false, newFileInfo.getCommitTime(), newFileInfo.getFileId()));
       });
     }
 

@@ -36,6 +36,7 @@ import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.exception.InvalidHoodiePathException;
 import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.TmpFileWrapper;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -190,6 +191,7 @@ public class FSUtils {
     return commitFileName.split("\\.")[0];
   }
 
+  // TODO
   public static String getCommitTime(String fullFileName) {
     if (isLogFile(fullFileName)) {
       return fullFileName.split("_")[1].split("\\.")[0];
@@ -201,6 +203,7 @@ public class FSUtils {
     return fs.getFileStatus(path).getLen();
   }
 
+  // TODO
   public static String getFileId(String fullFileName) {
     return fullFileName.split("_")[0];
   }
@@ -298,10 +301,10 @@ public class FSUtils {
     }
   }
 
-  public static Map<String, FileStatus[]> getFilesInPartitions(HoodieEngineContext engineContext,
-                                                               HoodieMetadataConfig metadataConfig,
-                                                               String basePathStr,
-                                                               String[] partitionPaths) {
+  public static Map<String, TmpFileWrapper[]> getFilesInPartitions(HoodieEngineContext engineContext,
+                                                                   HoodieMetadataConfig metadataConfig,
+                                                                   String basePathStr,
+                                                                   String[] partitionPaths) {
     try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr, true)) {
       return tableMetadata.getAllFilesInPartitions(Arrays.asList(partitionPaths));
     } catch (Exception ex) {

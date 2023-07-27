@@ -43,6 +43,7 @@ import org.apache.hudi.metadata.HoodieMetadataLogRecordReader;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadataKeyGenerator;
 import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.metadata.TmpFileWrapper;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 
@@ -132,7 +133,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
           try {
             downLatch.countDown();
             downLatch.await();
-            FileStatus[] files = tableMetadata.getAllFilesInPartition(new Path(finalPartition));
+            TmpFileWrapper[] files = tableMetadata.getAllFilesInPartition(new Path(finalPartition));
             if (files.length != 1) {
               LOG.warn("Miss match data file numbers.");
               throw new RuntimeException("Miss match data file numbers.");
@@ -174,7 +175,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     HoodieTable table = HoodieSparkTable.create(writeConfig, context);
     TableFileSystemView tableView = table.getHoodieView();
     List<String> fullPartitionPaths = fsPartitions.stream().map(partition -> basePath + "/" + partition).collect(Collectors.toList());
-    Map<String, FileStatus[]> partitionToFilesMap = tableMetadata.getAllFilesInPartitions(fullPartitionPaths);
+    Map<String, TmpFileWrapper[]> partitionToFilesMap = tableMetadata.getAllFilesInPartitions(fullPartitionPaths);
     assertEquals(fsPartitions.size(), partitionToFilesMap.size());
 
     fsPartitions.forEach(partition -> {
@@ -211,7 +212,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     init(tableType);
     HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(context,
         writeConfig.getMetadataConfig(), writeConfig.getBasePath(), false);
-    FileStatus[] allFilesInPartition =
+    TmpFileWrapper[] allFilesInPartition =
         tableMetadata.getAllFilesInPartition(new Path(writeConfig.getBasePath() + "dummy"));
     assertEquals(allFilesInPartition.length, 0);
   }

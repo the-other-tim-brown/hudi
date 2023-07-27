@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstan
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.metadata.TmpFileWrapper
 import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, SparkAdapterSupport}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -73,7 +74,7 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
 
   def getFilesInPartitions(spark: SparkSession,
                            table: CatalogTable,
-                           partitionPaths: Seq[String]): Map[String, Array[FileStatus]] = {
+                           partitionPaths: Seq[String]): Map[String, Array[TmpFileWrapper]] = {
     val sparkEngine = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
     val metadataConfig = {
       val properties = TypedProperties.fromMap((spark.sessionState.conf.getAllConfs ++ table.storage.properties ++ table.properties).asJava)

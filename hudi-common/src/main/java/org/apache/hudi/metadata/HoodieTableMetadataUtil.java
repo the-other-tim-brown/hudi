@@ -309,7 +309,7 @@ public class HoodieTableMetadataUtil {
       MetadataRecordsGenerationParams recordsGenerationParams) {
     final Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
     final HoodieData<HoodieRecord> filesPartitionRecordsRDD = context.parallelize(
-        convertMetadataToFilesPartitionRecords(commitMetadata, instantTime), 1);
+        convertMetadataToFilesPartitionRecords(commitMetadata, instantTime), 1); // TODO why is this parallelism 1
     partitionToRecordsMap.put(MetadataPartitionType.FILES, filesPartitionRecordsRDD);
 
     if (recordsGenerationParams.getEnabledPartitionTypes().contains(MetadataPartitionType.BLOOM_FILTERS)) {
@@ -378,8 +378,12 @@ public class HoodieTableMetadataUtil {
                       CollectionUtils::combine);
 
               newFileCount.add(updatedFilesToSizesMapping.size());
-              return HoodieMetadataPayload.createPartitionFilesRecord(partition, Option.of(updatedFilesToSizesMapping),
-                  Option.empty());
+              List<HoodieMetadataPayload.FileUpdate> updates = updatedFilesToSizesMapping.entrySet().stream().map(fileToSize -> {
+                String fileName = fileToSize.getKey();
+                Long size = fileToSize.getValue();
+                return HoodieMetadataPayload.FileUpdate.forAdd(fileName, "fileIDTODO", instantTime, size);
+              }).collect(Collectors.toList());
+              return HoodieMetadataPayload.createPartitionFilesRecord(partition, updates);
             })
             .collect(Collectors.toList());
 
@@ -507,8 +511,8 @@ public class HoodieTableMetadataUtil {
       final String partition = getPartitionIdentifier(partitionName);
       // Files deleted from a partition
       List<String> deletedFiles = partitionMetadata.getDeletePathPatterns();
-      HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, Option.empty(),
-          Option.of(new ArrayList<>(deletedFiles)));
+      HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, deletedFiles.stream().map(file ->
+          HoodieMetadataPayload.FileUpdate.forDelete(file, "fileIdTODO", instantTime)).collect(Collectors.toList()));
       records.add(record);
       fileDeleteCount[0] += deletedFiles.size();
       boolean isPartitionDeleted = partitionMetadata.getIsPartitionDeleted();
@@ -536,12 +540,16 @@ public class HoodieTableMetadataUtil {
     filesAdded.forEach((k,v) -> {
       String partition = k;
       Map<String, Long> filestoAdd = v;
+      List<HoodieMetadataPayload.FileUpdate> fileUpdates = new ArrayList<>();
+      filestoAdd.forEach((file, size) ->
+          fileUpdates.add(HoodieMetadataPayload.FileUpdate.forAdd(file, "fileIDTODO", instantTime, size)));
       filesAddedCount[0] += filestoAdd.size();
       Option<List<String>> filesToDelete = filesDeleted.containsKey(k) ? Option.of(filesDeleted.get(k)) : Option.empty();
       if (filesToDelete.isPresent()) {
+        filesToDelete.get().forEach(file -> fileUpdates.add(HoodieMetadataPayload.FileUpdate.forDelete(file, "fileIDTODO", instantTime)));
         fileDeleteCount[0] += filesToDelete.get().size();
       }
-      HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, Option.of(filestoAdd), filesToDelete);
+      HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, fileUpdates);
       records.add(record);
     });
 
@@ -551,7 +559,9 @@ public class HoodieTableMetadataUtil {
       Option<List<String>> filesToDelete = Option.of(v);
       if (!filesAdded.containsKey(partition)) {
         fileDeleteCount[0] += filesToDelete.get().size();
-        HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, Option.empty(), filesToDelete);
+        List<HoodieMetadataPayload.FileUpdate> fileUpdates = filesToDelete.get().stream().map(file ->
+            HoodieMetadataPayload.FileUpdate.forDelete(file, "fileIdTODO", instantTime)).collect(Collectors.toList());
+        HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, fileUpdates);
         records.add(record);
       }
     });
@@ -751,9 +761,10 @@ public class HoodieTableMetadataUtil {
       if (partitionToAppendedFiles.containsKey(partitionName)) {
         filesAdded = Option.of(partitionToAppendedFiles.remove(partitionName));
       }
-
-      HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, filesAdded,
-          Option.of(new ArrayList<>(deletedFiles)));
+      List<HoodieMetadataPayload.FileUpdate> fileUpdates = new ArrayList<>();
+      filesAdded.ifPresent(m -> m.entrySet().stream().map(entry -> HoodieMetadataPayload.FileUpdate.forAdd(entry.getKey(), "fileIDTODO", instantTime, entry.getValue())).forEach(fileUpdates::add));
+      deletedFiles.stream().map(deletion -> HoodieMetadataPayload.FileUpdate.forDelete(deletion, "fileIDTODO", instantTime)).forEach(fileUpdates::add);
+      HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, fileUpdates);
       records.add(record);
     });
 
@@ -767,8 +778,8 @@ public class HoodieTableMetadataUtil {
           "Rollback file cannot both be appended and deleted");
 
       // New files added to a partition
-      HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, Option.of(appendedFileMap),
-          Option.empty());
+      HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, appendedFileMap.entrySet().stream()
+          .map(entry -> HoodieMetadataPayload.FileUpdate.forAdd(entry.getKey(), "fileIDTODO", instantTime, entry.getValue())).collect(Collectors.toList()));
       records.add(record);
     });
 

@@ -41,6 +41,7 @@ import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.metadata.TmpFileWrapper;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -371,17 +372,17 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
         ));
 
     try {
-      Map<String, FileStatus[]> fetchedPartitionsMap =
+      Map<String, TmpFileWrapper[]> fetchedPartitionsMap =
           tableMetadata.getAllFilesInPartitions(missingPartitionPathsMap.keySet());
 
       // Ingest newly fetched partitions into cache
       fetchedPartitionsMap.forEach((absolutePath, files) -> {
         Path relativePath = missingPartitionPathsMap.get(absolutePath);
-        fileStatusCache.put(relativePath, files);
+        fileStatusCache.put(relativePath, Arrays.stream(files).map(TmpFileWrapper::getFileStatus).toArray(FileStatus[]::new));
       });
 
       return combine(flatMap(cachedPartitionPaths.values()),
-          flatMap(fetchedPartitionsMap.values()));
+          fetchedPartitionsMap.values().stream().flatMap(Arrays::stream).map(TmpFileWrapper::getFileStatus).toArray(FileStatus[]::new));
     } catch (IOException e) {
       throw new HoodieIOException("Failed to list partition paths", e);
     }

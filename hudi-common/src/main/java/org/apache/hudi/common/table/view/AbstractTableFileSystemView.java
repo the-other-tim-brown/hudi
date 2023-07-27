@@ -40,8 +40,8 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.metadata.TmpFileWrapper;
 
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -140,7 +140,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   /**
    * Adds the provided statuses into the file system view, and also caches it inside this object.
    */
-  public List<HoodieFileGroup> addFilesToView(FileStatus[] statuses) {
+  public List<HoodieFileGroup> addFilesToView(TmpFileWrapper[] statuses) {
     HoodieTimer timer = HoodieTimer.start();
     List<HoodieFileGroup> fileGroups = buildFileGroups(statuses, visibleCommitsAndCompactionTimeline, true);
     long fgBuildTimeTakenMs = timer.endTimer();
@@ -171,7 +171,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   /**
    * Build FileGroups from passed in file-status.
    */
-  protected List<HoodieFileGroup> buildFileGroups(FileStatus[] statuses, HoodieTimeline timeline,
+  protected List<HoodieFileGroup> buildFileGroups(TmpFileWrapper[] statuses, HoodieTimeline timeline,
                                                   boolean addPendingCompactionFileSlice) {
     return buildFileGroups(convertFileStatusesToBaseFiles(statuses), convertFileStatusesToLogFiles(statuses), timeline,
         addPendingCompactionFileSlice);
@@ -349,7 +349,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
                   partition, FSUtils.getPartitionPath(metaClient.getBasePathV2(), partition)))
               .collect(Collectors.toList());
           long beginLsTs = System.currentTimeMillis();
-          Map<Pair<String, Path>, FileStatus[]> statusesMap =
+          Map<Pair<String, Path>, TmpFileWrapper[]> statusesMap =
               listPartitions(absolutePartitionPathList);
           long endLsTs = System.currentTimeMillis();
           LOG.debug("Time taken to list partitions " + partitionSet + " =" + (endLsTs - beginLsTs));
@@ -388,22 +388,22 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @return all the files from the partitions.
    * @throws IOException upon error.
    */
-  protected Map<Pair<String, Path>, FileStatus[]> listPartitions(
+  protected Map<Pair<String, Path>, TmpFileWrapper[]> listPartitions(
       List<Pair<String, Path>> partitionPathList) throws IOException {
-    Map<Pair<String, Path>, FileStatus[]> fileStatusMap = new HashMap<>();
+    Map<Pair<String, Path>, TmpFileWrapper[]> fileStatusMap = new HashMap<>();
 
     for (Pair<String, Path> partitionPair : partitionPathList) {
       Path absolutePartitionPath = partitionPair.getRight();
       try {
-        fileStatusMap.put(partitionPair, metaClient.getFs().listStatus(absolutePartitionPath));
+        fileStatusMap.put(partitionPair, TmpFileWrapper.fromFileStatusArray(metaClient.getFs().listStatus(absolutePartitionPath)));
       } catch (IOException e) {
         // Create the path if it does not exist already
         if (!metaClient.getFs().exists(absolutePartitionPath)) {
           metaClient.getFs().mkdirs(absolutePartitionPath);
-          fileStatusMap.put(partitionPair, new FileStatus[0]);
+          fileStatusMap.put(partitionPair, new TmpFileWrapper[0]);
         } else {
           // in case the partition path was created by another caller
-          fileStatusMap.put(partitionPair, metaClient.getFs().listStatus(absolutePartitionPath));
+          fileStatusMap.put(partitionPair, TmpFileWrapper.fromFileStatusArray(metaClient.getFs().listStatus(absolutePartitionPath)));
         }
       }
     }
@@ -430,7 +430,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
           Path partitionPath = FSUtils.getPartitionPath(metaClient.getBasePathV2(), partitionPathStr);
           long beginLsTs = System.currentTimeMillis();
-          FileStatus[] statuses = listPartition(partitionPath);
+          TmpFileWrapper[] statuses = listPartition(partitionPath);
           long endLsTs = System.currentTimeMillis();
           LOG.debug("#files found in partition (" + partitionPathStr + ") =" + statuses.length + ", Time taken ="
               + (endLsTs - beginLsTs));
@@ -457,17 +457,17 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param partitionPath The absolute path of the partition
    * @throws IOException
    */
-  protected FileStatus[] listPartition(Path partitionPath) throws IOException {
+  protected TmpFileWrapper[] listPartition(Path partitionPath) throws IOException {
     try {
-      return metaClient.getFs().listStatus(partitionPath);
+      return TmpFileWrapper.fromFileStatusArray(metaClient.getFs().listStatus(partitionPath));
     } catch (IOException e) {
       // Create the path if it does not exist already
       if (!metaClient.getFs().exists(partitionPath)) {
         metaClient.getFs().mkdirs(partitionPath);
-        return new FileStatus[0];
+        return new TmpFileWrapper[0];
       } else {
         // in case the partition path was created by another caller
-        return metaClient.getFs().listStatus(partitionPath);
+        return TmpFileWrapper.fromFileStatusArray(metaClient.getFs().listStatus(partitionPath));
       }
     }
   }
@@ -477,8 +477,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    *
    * @param statuses List of File-Status
    */
-  private Stream<HoodieBaseFile> convertFileStatusesToBaseFiles(FileStatus[] statuses) {
-    Predicate<FileStatus> roFilePredicate = fileStatus -> fileStatus.getPath().getName()
+  private Stream<HoodieBaseFile> convertFileStatusesToBaseFiles(TmpFileWrapper[] statuses) {
+    Predicate<TmpFileWrapper> roFilePredicate = fileStatus -> fileStatus.getPath().getName()
         .contains(metaClient.getTableConfig().getBaseFileFormat().getFileExtension());
     return Arrays.stream(statuses).filter(roFilePredicate).map(HoodieBaseFile::new);
   }
@@ -488,8 +488,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    *
    * @param statuses List of File-Status
    */
-  private Stream<HoodieLogFile> convertFileStatusesToLogFiles(FileStatus[] statuses) {
-    Predicate<FileStatus> rtFilePredicate = fileStatus ->  {
+  private Stream<HoodieLogFile> convertFileStatusesToLogFiles(TmpFileWrapper[] statuses) {
+    Predicate<TmpFileWrapper> rtFilePredicate = fileStatus ->  {
       String fileName = fileStatus.getPath().getName();
       Matcher matcher = FSUtils.LOG_FILE_PATTERN.matcher(fileName);
       return matcher.find() && fileName.contains(metaClient.getTableConfig().getLogFileFormat().getFileExtension());
