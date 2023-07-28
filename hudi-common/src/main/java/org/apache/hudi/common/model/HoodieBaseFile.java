@@ -20,8 +20,12 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.CachingPath;
 
 import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
+
+import static org.apache.hudi.hadoop.CachingPath.createRelativePathUnsafe;
 
 /**
  * Hoodie base file - Represents metadata about Hudi file in DFS.
@@ -29,11 +33,15 @@ import org.apache.hadoop.fs.FileStatus;
  */
 public class HoodieBaseFile extends BaseFile {
 
+  private final String fileId;
+  private final String commitTime;
   private Option<BaseFile> bootstrapBaseFile;
 
   public HoodieBaseFile(HoodieBaseFile dataFile) {
     super(dataFile);
     this.bootstrapBaseFile = dataFile.bootstrapBaseFile;
+    this.fileId = dataFile.getFileId();
+    this.commitTime = dataFile.getCommitTime();
   }
 
   public HoodieBaseFile(FileStatus fileStatus) {
@@ -41,8 +49,10 @@ public class HoodieBaseFile extends BaseFile {
   }
 
   public HoodieBaseFile(FileStatus fileStatus, BaseFile bootstrapBaseFile) {
-    super(fileStatus);
+    super(manipulateFileStatus(fileStatus));
     this.bootstrapBaseFile = Option.ofNullable(bootstrapBaseFile);
+    this.fileId = FSUtils.getFileId(getFileName());
+    this.commitTime = FSUtils.getCommitTime(getFileName());
   }
 
   public HoodieBaseFile(String filePath) {
@@ -52,14 +62,32 @@ public class HoodieBaseFile extends BaseFile {
   public HoodieBaseFile(String filePath, BaseFile bootstrapBaseFile) {
     super(filePath);
     this.bootstrapBaseFile = Option.ofNullable(bootstrapBaseFile);
+    this.fileId = FSUtils.getFileId(getFileName());
+    this.commitTime = FSUtils.getCommitTime(getFileName());
+  }
+
+  private static FileStatus manipulateFileStatus(FileStatus fileStatus) {
+    if (fileStatus == null) {
+      return null;
+    }
+    if (!FSUtils.fileNameIsNewEncoding(fileStatus.getPath().getName())) {
+      return fileStatus;
+    }
+    Path parent = fileStatus.getPath().getParent();
+    String fileName = fileStatus.getPath().getName();
+    String updatedFileName = FSUtils.fileNameOriginalPath(fileName);
+    return new FileStatus(fileStatus.getLen(), fileStatus.isDirectory(), fileStatus.getReplication(),
+        fileStatus.getBlockSize(), fileStatus.getModificationTime(), fileStatus.getAccessTime(),
+        fileStatus.getPermission(), fileStatus.getOwner(), fileStatus.getGroup(),
+        new CachingPath(parent, createRelativePathUnsafe(updatedFileName)));
   }
 
   public String getFileId() {
-    return FSUtils.getFileId(getFileName());
+    return fileId;
   }
 
   public String getCommitTime() {
-    return FSUtils.getCommitTime(getFileName());
+    return commitTime;
   }
 
   public Option<BaseFile> getBootstrapBaseFile() {

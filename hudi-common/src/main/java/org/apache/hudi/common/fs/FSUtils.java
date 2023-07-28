@@ -190,7 +190,11 @@ public class FSUtils {
     return commitFileName.split("\\.")[0];
   }
 
+  // TODO modify for parsing commit time from new encoding
   public static String getCommitTime(String fullFileName) {
+    if (fileNameIsNewEncoding(fullFileName)) {
+      return fullFileName.split("_")[2];
+    }
     if (isLogFile(fullFileName)) {
       return fullFileName.split("_")[1].split("\\.")[0];
     }
@@ -202,7 +206,29 @@ public class FSUtils {
   }
 
   public static String getFileId(String fullFileName) {
+    if (fileNameIsNewEncoding(fullFileName)) {
+      return fullFileName.split("_")[1];
+    }
     return fullFileName.split("_")[0];
+  }
+
+  // TODO better name/way of classifying these paths
+  public static boolean fileNameIsNewEncoding(String fullFileName) {
+    return fullFileName.startsWith("1_");
+  }
+
+  // TODO should we just contain this in HoodieBaseFile? also needs better name
+  public static String fileNameOriginalPath(String fullFileName) {
+    int underscores = 0;
+    for (int i = 0; i < fullFileName.length(); i++) {
+      if (fullFileName.charAt(i) == '_') {
+        underscores++;
+      }
+      if (underscores == 3) {
+        return fullFileName.substring(i + 1);
+      }
+    }
+    throw new RuntimeException("TODO");
   }
 
   /**

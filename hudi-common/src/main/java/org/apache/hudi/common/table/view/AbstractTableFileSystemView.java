@@ -491,6 +491,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   private Stream<HoodieLogFile> convertFileStatusesToLogFiles(FileStatus[] statuses) {
     Predicate<FileStatus> rtFilePredicate = fileStatus ->  {
       String fileName = fileStatus.getPath().getName();
+      // TODO: do we need to modify this matcher? Log file paths contain a lot more info than base file so we should decide if we do this in the current iteration
       Matcher matcher = FSUtils.LOG_FILE_PATTERN.matcher(fileName);
       return matcher.find() && fileName.contains(metaClient.getTableConfig().getLogFileFormat().getFileExtension());
     };

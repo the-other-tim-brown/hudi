@@ -541,7 +541,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         .map(e -> {
           // NOTE: Since we know that the Metadata Table's Payload is simply a file-name we're
           //       creating Hadoop's Path using more performant unsafe variant
+          // TODO test if this will work with absolute paths
           CachingPath filePath = new CachingPath(partitionPath, createRelativePathUnsafe(e.getKey()));
+          // TODO in 1.0.0, should we consider changing this to a custom object instead of FileStatus with only the vars we care about (size and path)?
           return new FileStatus(e.getValue().getSize(), false, 0, blockSize, 0, 0,
               null, null, null, filePath);
         })
