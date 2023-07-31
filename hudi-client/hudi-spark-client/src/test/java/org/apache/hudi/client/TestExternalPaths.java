@@ -37,6 +37,7 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -49,7 +50,9 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoders;
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -58,6 +61,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import scala.reflect.ClassTag;
 
@@ -67,8 +71,9 @@ public class TestExternalPaths extends HoodieClientTestBase {
 
   private HoodieWriteConfig writeConfig;
 
-  @Test
-  public void testFlowClassic() throws Exception {
+  @ParameterizedTest
+  @MethodSource("getArgs")
+  public void testFlow(FileIdAndNameGenerator fileIdAndNameGenerator) throws Exception {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     writeConfig = HoodieWriteConfig.newBuilder()
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(INMEMORY).build())
@@ -84,8 +89,9 @@ public class TestExternalPaths extends HoodieClientTestBase {
     writeClient = new SparkRDDWriteClient(context, writeConfig, false, Option.empty());
     String instantTime1 = writeClient.startCommit(HoodieTimeline.REPLACE_COMMIT_ACTION, metaClient);
     String partitionPath1 = "americas/brazil";
-    String fileId1 = UUID.randomUUID().toString();
-    String fileName1 = String.format("%s_0-28-34_%s.parquet", fileId1, instantTime1);
+    Pair<String, String> fileIdAndName1 = fileIdAndNameGenerator.generate(1, instantTime1);
+    String fileId1 = fileIdAndName1.getLeft();
+    String fileName1 = fileIdAndName1.getRight();
     String filePath1 = String.format("%s/%s", partitionPath1, fileName1);
     WriteStatus writeStatus1 = createWriteStatus(partitionPath1, filePath1, fileId1);
     JavaRDD<WriteStatus> rdd1 = createRdd(Arrays.asList(writeStatus1));
@@ -96,8 +102,9 @@ public class TestExternalPaths extends HoodieClientTestBase {
 
     // add a new file and remove the old one
     String instantTime2 = writeClient.startCommit(HoodieTimeline.REPLACE_COMMIT_ACTION, metaClient);
-    String fileId2 = UUID.randomUUID().toString();
-    String fileName2 = String.format("%s_0-28-34_%s.parquet", fileId2, instantTime2);
+    Pair<String, String> fileIdAndName2 = fileIdAndNameGenerator.generate(2, instantTime2);
+    String fileId2 = fileIdAndName2.getLeft();
+    String fileName2 = fileIdAndName2.getRight();
     String filePath2 = String.format("%s/%s", partitionPath1, fileName2);
     WriteStatus newWriteStatus = createWriteStatus(partitionPath1, filePath2, fileId2);
     JavaRDD<WriteStatus> rdd2 = createRdd(Arrays.asList(newWriteStatus));
@@ -111,9 +118,10 @@ public class TestExternalPaths extends HoodieClientTestBase {
     // Add file to a new partition
     String partitionPath2 = "americas/argentina";
     String instantTime3 = writeClient.startCommit(HoodieTimeline.REPLACE_COMMIT_ACTION, metaClient);
-    String fileId3 = UUID.randomUUID().toString();
-    String fileName3 = String.format("%s_0-28-34_%s.parquet", fileId3, instantTime3);
-    String filePath3 = String.format("%s/%st", partitionPath2, fileName3);
+    Pair<String, String> fileIdAndName3 = fileIdAndNameGenerator.generate(3, instantTime3);
+    String fileId3 = fileIdAndName3.getLeft();
+    String fileName3 = fileIdAndName3.getRight();
+    String filePath3 = String.format("%s/%s", partitionPath2, fileName3);
     WriteStatus writeStatus3 = createWriteStatus(partitionPath2, filePath3, fileId3);
     JavaRDD<WriteStatus> rdd3 = createRdd(Arrays.asList(writeStatus3));
     metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime3), Option.empty());
@@ -152,90 +160,23 @@ public class TestExternalPaths extends HoodieClientTestBase {
     assertFileGroupCorrectness(instantTime3, partitionPath2, filePath3, fileId3);
   }
 
-  @Test
-  public void testFlowExternal() throws Exception {
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-    writeConfig = HoodieWriteConfig.newBuilder()
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(INMEMORY).build())
-        .withPath(metaClient.getBasePathV2().toString())
-        .withEmbeddedTimelineServerEnabled(false)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
-            .withMaxNumDeltaCommitsBeforeCompaction(2)
-            .enable(true)
-            .build())
-        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(1, 2).build())
-        .withTableServicesEnabled(true)
-        .build();
+  static Stream<Arguments> getArgs() {
+    FileIdAndNameGenerator hudiBased = (index, instantTime) -> {
+      String fileId = UUID.randomUUID().toString();
+      String fileName = String.format("%s_0-28-34_%s.parquet", fileId, instantTime);
+      return Pair.of(fileId, fileName);
+    };
+    FileIdAndNameGenerator external = (index, instantTime) -> {
+      String fileName = String.format("file%d.parquet", index);
+      String fileId = fileName;
+      return Pair.of(fileId, fileName);
+    };
+    return Stream.of(Arguments.of(hudiBased), Arguments.of(external));
+  }
 
-    writeClient = new SparkRDDWriteClient(context, writeConfig, false, Option.empty());
-    String instantTime1 = writeClient.startCommit(HoodieTimeline.REPLACE_COMMIT_ACTION, metaClient);
-    String partitionPath1 = "americas/brazil";
-    String fileName1 = "file1.parquet";
-    String fileId1 = fileName1;
-    String filePath1 = String.format("%s/%s", partitionPath1, fileName1);
-    WriteStatus writeStatus1 = createWriteStatus(partitionPath1, filePath1, fileId1);
-    JavaRDD<WriteStatus> rdd1 = createRdd(Arrays.asList(writeStatus1));
-    metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime1), Option.empty());
-    writeClient.commit(instantTime1, rdd1, Option.empty(), HoodieTimeline.REPLACE_COMMIT_ACTION,  Collections.emptyMap());
-
-    assertFileGroupCorrectness(instantTime1, partitionPath1, filePath1, fileId1);
-
-    // add a new file and remove the old one
-    String instantTime2 = writeClient.startCommit(HoodieTimeline.REPLACE_COMMIT_ACTION, metaClient);
-    String fileName2 = "file2.parquet";
-    String fileId2 = fileName2;
-    String filePath2 = String.format("%s/%s", partitionPath1, fileName2);
-    WriteStatus newWriteStatus = createWriteStatus(partitionPath1, filePath2, fileId2);
-    JavaRDD<WriteStatus> rdd2 = createRdd(Arrays.asList(newWriteStatus));
-    Map<String, List<String>> partitionToReplacedFileIds = new HashMap<>();
-    partitionToReplacedFileIds.put(partitionPath1, Arrays.asList(fileId1));
-    metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime2), Option.empty());
-    writeClient.commit(instantTime2, rdd2, Option.empty(), HoodieTimeline.REPLACE_COMMIT_ACTION, partitionToReplacedFileIds);
-
-    assertFileGroupCorrectness(instantTime2, partitionPath1, filePath2, fileId2);
-
-    // Add file to a new partition
-    String partitionPath2 = "americas/argentina";
-    String instantTime3 = writeClient.startCommit(HoodieTimeline.REPLACE_COMMIT_ACTION, metaClient);
-    String fileName3 = "file3.parquet";
-    String fileId3 = fileName3;
-    String filePath3 = String.format("%s/%s", partitionPath2, fileName3);
-    WriteStatus writeStatus3 = createWriteStatus(partitionPath2, filePath3, fileId3);
-    JavaRDD<WriteStatus> rdd3 = createRdd(Arrays.asList(writeStatus3));
-    metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime3), Option.empty());
-    writeClient.commit(instantTime3, rdd3, Option.empty(), HoodieTimeline.REPLACE_COMMIT_ACTION, Collections.emptyMap());
-
-    assertFileGroupCorrectness(instantTime3, partitionPath2, filePath3, fileId3);
-
-    // clean first commit
-    String cleanTime = HoodieActiveTimeline.createNewInstantTime();
-    HoodieCleanerPlan cleanerPlan = cleanerPlan(new HoodieActionInstant(instantTime2, HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieInstant.State.COMPLETED.name()), instantTime3,
-        Collections.singletonMap(partitionPath1, Arrays.asList(new HoodieCleanFileInfo(filePath1, false))));
-    metaClient.getActiveTimeline().saveToCleanRequested(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, cleanTime),
-        TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
-    HoodieInstant inflightClean = metaClient.getActiveTimeline().transitionCleanRequestedToInflight(
-        new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, cleanTime), Option.empty());
-    List<HoodieCleanStat> cleanStats = Arrays.asList(createCleanStat(partitionPath1, Arrays.asList(filePath1), instantTime2, instantTime3));
-    HoodieCleanMetadata metadata = CleanerUtils.convertCleanMetadata(
-        cleanTime,
-        Option.empty(),
-        cleanStats
-    );
-    HoodieTableMetadataWriter hoodieTableMetadataWriter = (HoodieTableMetadataWriter) writeClient.initTable(WriteOperationType.UPSERT, Option.of(cleanTime)).getMetadataWriter(cleanTime).get();
-    hoodieTableMetadataWriter.update(metadata, cleanTime);
-    metaClient.getActiveTimeline().transitionCleanInflightToComplete(inflightClean,
-        TimelineMetadataUtils.serializeCleanMetadata(metadata));
-    // make sure we still get the same results as before
-    assertFileGroupCorrectness(instantTime2, partitionPath1, filePath2, fileId2);
-    assertFileGroupCorrectness(instantTime3, partitionPath2, filePath3, fileId3);
-
-    // trigger archiver manually
-    writeClient.archive();
-    // assert commit was archived
-    Assertions.assertEquals(1, metaClient.getArchivedTimeline().reload().filterCompletedInstants().countInstants());
-    // make sure we still get the same results as before
-    assertFileGroupCorrectness(instantTime2, partitionPath1, filePath2, fileId2);
-    assertFileGroupCorrectness(instantTime3, partitionPath2, filePath3, fileId3);
+  @FunctionalInterface
+  private interface FileIdAndNameGenerator {
+    Pair<String, String> generate(int iteration, String instantTime);
   }
 
   private void assertFileGroupCorrectness(String instantTime, String partitionPath, String filePath, String fileId) {
