@@ -350,6 +350,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    * @param filesAdded   Mapping of files to their sizes for files which have been added to this partition
    * @param filesDeleted List of files which have been deleted from this partition
    */
+  // TODO take in commit time for external path
   public static HoodieRecord<HoodieMetadataPayload> createPartitionFilesRecord(String partition,
                                                                                Option<Map<String, Long>> filesAdded,
                                                                                Option<List<String>> filesDeleted) {
@@ -357,6 +358,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     filesAdded.ifPresent(filesMap ->
         fileInfo.putAll(
             filesMap.entrySet().stream().collect(
+                // TODO modify key to be external path if doesn't match hudi expectations
                 Collectors.toMap(Map.Entry::getKey, (entry) -> {
                   long fileSize = entry.getValue();
                   // Assert that the file-size of the file being added is positive, since Hudi

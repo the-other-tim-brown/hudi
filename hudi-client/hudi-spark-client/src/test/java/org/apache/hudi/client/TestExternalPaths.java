@@ -18,17 +18,31 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.avro.model.HoodieActionInstant;
+import org.apache.hudi.avro.model.HoodieCleanFileInfo;
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.table.action.clean.CleanPlanner;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.spark.api.java.JavaRDD;
@@ -39,6 +53,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -49,26 +64,201 @@ import scala.reflect.ClassTag;
 import static org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY;
 
 public class TestExternalPaths extends HoodieClientTestBase {
+
+  private HoodieWriteConfig writeConfig;
+
   @Test
-  public void testFlow() throws Exception {
+  public void testFlowClassic() throws Exception {
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+    writeConfig = HoodieWriteConfig.newBuilder()
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(INMEMORY).build())
         .withPath(metaClient.getBasePathV2().toString())
         .withEmbeddedTimelineServerEnabled(false)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .withMaxNumDeltaCommitsBeforeCompaction(2)
+            .enable(true).build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(1, 2).build())
+        .withTableServicesEnabled(true)
         .build();
 
     writeClient = new SparkRDDWriteClient(context, writeConfig, false, Option.empty());
-    String instantTime = writeClient.startCommit(HoodieTimeline.REPLACE_COMMIT_ACTION, metaClient);
+    String instantTime1 = writeClient.startCommit(HoodieTimeline.REPLACE_COMMIT_ACTION, metaClient);
+    String partitionPath1 = "americas/brazil";
+    String fileId1 = UUID.randomUUID().toString();
+    String fileName1 = String.format("%s_0-28-34_%s.parquet", fileId1, instantTime1);
+    String filePath1 = String.format("%s/%s", partitionPath1, fileName1);
+    WriteStatus writeStatus1 = createWriteStatus(partitionPath1, filePath1, fileId1);
+    JavaRDD<WriteStatus> rdd1 = createRdd(Arrays.asList(writeStatus1));
+    metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime1), Option.empty());
+    writeClient.commit(instantTime1, rdd1, Option.empty(), HoodieTimeline.REPLACE_COMMIT_ACTION,  Collections.emptyMap());
+
+    assertFileGroupCorrectness(instantTime1, partitionPath1, filePath1, fileId1);
+
+    // add a new file and remove the old one
+    String instantTime2 = writeClient.startCommit(HoodieTimeline.REPLACE_COMMIT_ACTION, metaClient);
+    String fileId2 = UUID.randomUUID().toString();
+    String fileName2 = String.format("%s_0-28-34_%s.parquet", fileId2, instantTime2);
+    String filePath2 = String.format("%s/%s", partitionPath1, fileName2);
+    WriteStatus newWriteStatus = createWriteStatus(partitionPath1, filePath2, fileId2);
+    JavaRDD<WriteStatus> rdd2 = createRdd(Arrays.asList(newWriteStatus));
+    Map<String, List<String>> partitionToReplacedFileIds = new HashMap<>();
+    partitionToReplacedFileIds.put(partitionPath1, Arrays.asList(fileId1));
+    metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime2), Option.empty());
+    writeClient.commit(instantTime2, rdd2, Option.empty(), HoodieTimeline.REPLACE_COMMIT_ACTION, partitionToReplacedFileIds);
+
+    assertFileGroupCorrectness(instantTime2, partitionPath1, filePath2, fileId2);
+
+    // Add file to a new partition
+    String partitionPath2 = "americas/argentina";
+    String instantTime3 = writeClient.startCommit(HoodieTimeline.REPLACE_COMMIT_ACTION, metaClient);
+    String fileId3 = UUID.randomUUID().toString();
+    String fileName3 = String.format("%s_0-28-34_%s.parquet", fileId3, instantTime3);
+    String filePath3 = String.format("%s/%st", partitionPath2, fileName3);
+    WriteStatus writeStatus3 = createWriteStatus(partitionPath2, filePath3, fileId3);
+    JavaRDD<WriteStatus> rdd3 = createRdd(Arrays.asList(writeStatus3));
+    metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime3), Option.empty());
+    writeClient.commit(instantTime3, rdd3, Option.empty(), HoodieTimeline.REPLACE_COMMIT_ACTION, Collections.emptyMap());
+
+    assertFileGroupCorrectness(instantTime3, partitionPath2, filePath3, fileId3);
+
+    // clean first commit
+    String cleanTime = HoodieActiveTimeline.createNewInstantTime();
+    HoodieCleanerPlan cleanerPlan = cleanerPlan(new HoodieActionInstant(instantTime2, HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieInstant.State.COMPLETED.name()), instantTime3,
+        Collections.singletonMap(partitionPath1, Arrays.asList(new HoodieCleanFileInfo(filePath1, false))));
+    metaClient.getActiveTimeline().saveToCleanRequested(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, cleanTime),
+        TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
+    HoodieInstant inflightClean = metaClient.getActiveTimeline().transitionCleanRequestedToInflight(
+        new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, cleanTime), Option.empty());
+    List<HoodieCleanStat> cleanStats = Arrays.asList(createCleanStat(partitionPath1, Arrays.asList(filePath1), instantTime2, instantTime3));
+    HoodieCleanMetadata metadata = CleanerUtils.convertCleanMetadata(
+        cleanTime,
+        Option.empty(),
+        cleanStats
+    );
+    HoodieTableMetadataWriter hoodieTableMetadataWriter = (HoodieTableMetadataWriter) writeClient.initTable(WriteOperationType.UPSERT, Option.of(cleanTime)).getMetadataWriter(cleanTime).get();
+    hoodieTableMetadataWriter.update(metadata, cleanTime);
+    metaClient.getActiveTimeline().transitionCleanInflightToComplete(inflightClean,
+        TimelineMetadataUtils.serializeCleanMetadata(metadata));
+    // make sure we still get the same results as before
+    assertFileGroupCorrectness(instantTime2, partitionPath1, filePath2, fileId2);
+    assertFileGroupCorrectness(instantTime3, partitionPath2, filePath3, fileId3);
+
+    // trigger archiver manually
+    writeClient.archive();
+    // assert commit was archived
+    Assertions.assertEquals(1, metaClient.getArchivedTimeline().reload().filterCompletedInstants().countInstants());
+    // make sure we still get the same results as before
+    assertFileGroupCorrectness(instantTime2, partitionPath1, filePath2, fileId2);
+    assertFileGroupCorrectness(instantTime3, partitionPath2, filePath3, fileId3);
+  }
+
+  @Test
+  public void testFlowExternal() throws Exception {
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    writeConfig = HoodieWriteConfig.newBuilder()
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(INMEMORY).build())
+        .withPath(metaClient.getBasePathV2().toString())
+        .withEmbeddedTimelineServerEnabled(false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .withMaxNumDeltaCommitsBeforeCompaction(2)
+            .enable(true)
+            .build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(1, 2).build())
+        .withTableServicesEnabled(true)
+        .build();
+
+    writeClient = new SparkRDDWriteClient(context, writeConfig, false, Option.empty());
+    String instantTime1 = writeClient.startCommit(HoodieTimeline.REPLACE_COMMIT_ACTION, metaClient);
+    String partitionPath1 = "americas/brazil";
+    String fileName1 = "file1.parquet";
+    String fileId1 = fileName1;
+    String filePath1 = String.format("%s/%s", partitionPath1, fileName1);
+    WriteStatus writeStatus1 = createWriteStatus(partitionPath1, filePath1, fileId1);
+    JavaRDD<WriteStatus> rdd1 = createRdd(Arrays.asList(writeStatus1));
+    metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime1), Option.empty());
+    writeClient.commit(instantTime1, rdd1, Option.empty(), HoodieTimeline.REPLACE_COMMIT_ACTION,  Collections.emptyMap());
+
+    assertFileGroupCorrectness(instantTime1, partitionPath1, filePath1, fileId1);
+
+    // add a new file and remove the old one
+    String instantTime2 = writeClient.startCommit(HoodieTimeline.REPLACE_COMMIT_ACTION, metaClient);
+    String fileName2 = "file2.parquet";
+    String fileId2 = fileName2;
+    String filePath2 = String.format("%s/%s", partitionPath1, fileName2);
+    WriteStatus newWriteStatus = createWriteStatus(partitionPath1, filePath2, fileId2);
+    JavaRDD<WriteStatus> rdd2 = createRdd(Arrays.asList(newWriteStatus));
+    Map<String, List<String>> partitionToReplacedFileIds = new HashMap<>();
+    partitionToReplacedFileIds.put(partitionPath1, Arrays.asList(fileId1));
+    metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime2), Option.empty());
+    writeClient.commit(instantTime2, rdd2, Option.empty(), HoodieTimeline.REPLACE_COMMIT_ACTION, partitionToReplacedFileIds);
+
+    assertFileGroupCorrectness(instantTime2, partitionPath1, filePath2, fileId2);
+
+    // Add file to a new partition
+    String partitionPath2 = "americas/argentina";
+    String instantTime3 = writeClient.startCommit(HoodieTimeline.REPLACE_COMMIT_ACTION, metaClient);
+    String fileName3 = "file3.parquet";
+    String fileId3 = fileName3;
+    String filePath3 = String.format("%s/%st", partitionPath2, fileName3);
+    WriteStatus writeStatus3 = createWriteStatus(partitionPath2, filePath3, fileId3);
+    JavaRDD<WriteStatus> rdd3 = createRdd(Arrays.asList(writeStatus3));
+    metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime3), Option.empty());
+    writeClient.commit(instantTime3, rdd3, Option.empty(), HoodieTimeline.REPLACE_COMMIT_ACTION, Collections.emptyMap());
+
+    assertFileGroupCorrectness(instantTime3, partitionPath2, filePath3, fileId3);
+
+    // clean first commit
+    String cleanTime = writeClient.startCommit(HoodieTimeline.CLEAN_ACTION, metaClient);
+    HoodieInstant inflightClean = metaClient.getActiveTimeline().transitionCleanRequestedToInflight(
+        new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, cleanTime), Option.empty());
+    List<HoodieCleanStat> cleanStats = Arrays.asList(createCleanStat(partitionPath1, Arrays.asList(filePath1), instantTime2, instantTime3));
+    HoodieCleanMetadata metadata = CleanerUtils.convertCleanMetadata(
+        cleanTime,
+        Option.empty(),
+        cleanStats
+    );
+    HoodieTableMetadataWriter hoodieTableMetadataWriter = (HoodieTableMetadataWriter) writeClient.initTable(WriteOperationType.UPSERT, Option.of(cleanTime)).getMetadataWriter(cleanTime).get();
+    hoodieTableMetadataWriter.update(metadata, cleanTime);
+    metaClient.getActiveTimeline().transitionCleanInflightToComplete(inflightClean,
+        TimelineMetadataUtils.serializeCleanMetadata(metadata));
+    // make sure we still get the same results as before
+    assertFileGroupCorrectness(instantTime2, partitionPath1, filePath2, fileId2);
+    assertFileGroupCorrectness(instantTime3, partitionPath2, filePath3, fileId3);
+
+    // trigger archiver manually
+    writeClient.archive();
+    // assert commit was archived
+    Assertions.assertEquals(1, metaClient.getArchivedTimeline().reload().filterCompletedInstants().countInstants());
+    // make sure we still get the same results as before
+    assertFileGroupCorrectness(instantTime2, partitionPath1, filePath2, fileId2);
+    assertFileGroupCorrectness(instantTime3, partitionPath2, filePath3, fileId3);
+  }
+
+  private void assertFileGroupCorrectness(String instantTime, String partitionPath, String filePath, String fileId) {
+    HoodieTableFileSystemView fsView = new HoodieMetadataFileSystemView(context, metaClient, metaClient.reloadActiveTimeline(), writeConfig.getMetadataConfig());
+    List<HoodieFileGroup> fileGroups = fsView.getAllFileGroups(partitionPath).collect(Collectors.toList());
+    Assertions.assertEquals(1, fileGroups.size());
+    HoodieFileGroup fileGroup = fileGroups.get(0);
+    Assertions.assertEquals(fileId, fileGroup.getFileGroupId().getFileId());
+    Assertions.assertEquals(partitionPath, fileGroup.getPartitionPath());
+    HoodieBaseFile baseFile = fileGroup.getAllBaseFiles().findFirst().get();
+    Assertions.assertEquals(instantTime, baseFile.getCommitTime());
+    Assertions.assertEquals(metaClient.getBasePathV2().toString() + "/" + filePath, baseFile.getPath());
+  }
+
+  private JavaRDD<WriteStatus> createRdd(List<WriteStatus> writeStatuses) {
+    Dataset<WriteStatus> dsw = sparkSession.createDataset(writeStatuses, Encoders.javaSerialization(WriteStatus.class));
+    return new JavaRDD<>(dsw.rdd(), ClassTag.apply(WriteStatus.class));
+  }
+
+  private WriteStatus createWriteStatus(String partitionPath, String filePath, String fileId) {
     WriteStatus writeStatus = new WriteStatus();
-    String fileId = UUID.randomUUID().toString();
     writeStatus.setFileId(fileId);
-    String partitionPath = "/americas/brazil";
     writeStatus.setPartitionPath(partitionPath);
     HoodieWriteStat writeStat = new HoodieWriteStat();
     writeStat.setFileId(fileId);
-    writeStat.setPath("/americas/brazil/5d54b5e3-d612-42ee-9656-32f22c83233b-0_0-28-34_20220804164034570.parquet");
+    writeStat.setPath(filePath);
+    writeStat.setPartitionPath(partitionPath);
     writeStat.setNumWrites(3);
     writeStat.setNumDeletes(0);
     writeStat.setNumUpdateWrites(0);
@@ -84,18 +274,20 @@ public class TestExternalPaths extends HoodieClientTestBase {
     writeStat.setTotalCorruptLogBlock(0);
     writeStat.setTotalRollbackBlocks(0);
     writeStatus.setStat(writeStat);
-    List<WriteStatus> writeStatuses = Arrays.asList(writeStatus);
-    Dataset<WriteStatus> dsw = sparkSession.createDataset(writeStatuses, Encoders.javaSerialization(WriteStatus.class));
-    JavaRDD<WriteStatus> rdd = new JavaRDD<>(dsw.rdd(), ClassTag.apply(WriteStatus.class));
-    Option<Map<String, String>> extraMetadata = Option.empty();
-    String commitActionType = HoodieTimeline.REPLACE_COMMIT_ACTION;
-    Map<String, List<String>> partitionToReplacedFileIds = Collections.emptyMap();
-    metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime), Option.empty());
-    writeClient.commit(instantTime, rdd, extraMetadata, commitActionType, partitionToReplacedFileIds);
+    return writeStatus;
+  }
 
-    HoodieTableFileSystemView fsView = new HoodieMetadataFileSystemView(context, metaClient, metaClient.getActiveTimeline(), writeConfig.getMetadataConfig());
-    fsView.init(metaClient, metaClient.getActiveTimeline());
-    List<HoodieFileGroup> fileGroups = fsView.getAllFileGroups(partitionPath).collect(Collectors.toList());
-    Assertions.assertEquals(1, fsView.getAllFileGroups().collect(Collectors.toList()).size());
+  private HoodieCleanStat createCleanStat(String partitionPath, List<String> deletePaths, String earliestCommitToRetain, String lastCompletedCommitTimestamp) {
+    // TODO is path supposed to be the file name or include the partition path? Is it consistent between commit types?
+    List<String> pathsWithoutPartition = deletePaths.stream().map(path -> path.substring(partitionPath.length() + 1)).collect(Collectors.toList());
+    return new HoodieCleanStat(HoodieCleaningPolicy.KEEP_LATEST_COMMITS, partitionPath, pathsWithoutPartition, pathsWithoutPartition, Collections.emptyList(),
+        earliestCommitToRetain, lastCompletedCommitTimestamp);
+  }
+
+  private HoodieCleanerPlan cleanerPlan(HoodieActionInstant earliestInstantToRetain, String latestCommit, Map<String, List<HoodieCleanFileInfo>> filePathsToBeDeletedPerPartition) {
+    return new HoodieCleanerPlan(earliestInstantToRetain,
+        latestCommit,
+        writeConfig.getCleanerPolicy().name(), Collections.emptyMap(),
+        CleanPlanner.LATEST_CLEAN_PLAN_VERSION, filePathsToBeDeletedPerPartition, Collections.emptyList());
   }
 }

@@ -500,6 +500,7 @@ public class HoodieTableMetadataUtil {
    */
   public static List<HoodieRecord> convertMetadataToFilesPartitionRecords(HoodieCleanMetadata cleanMetadata,
                                                                           String instantTime) {
+    // TODO why linked list here?
     List<HoodieRecord> records = new LinkedList<>();
     int[] fileDeleteCount = {0};
     List<String> deletedPartitions = new ArrayList<>();
@@ -1003,7 +1004,7 @@ public class HoodieTableMetadataUtil {
         fileSliceStream = fsView.getLatestMergedFileSlicesBeforeOrOn(
             partition, metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().get().getTimestamp());
       } else {
-        return Collections.EMPTY_LIST;
+        return Collections.emptyList();
       }
     } else {
       fileSliceStream = fsView.getLatestFileSlices(partition);
