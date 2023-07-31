@@ -36,6 +36,10 @@ public class BaseFileDTO {
   private String fullPath;
   @JsonProperty("fileLen")
   private long fileLen;
+  @JsonProperty("commitTime")
+  private String commitTime;
+  @JsonProperty("fileId")
+  private String fileId;
   @JsonProperty("bootstrapBaseFile")
   private BaseFileDTO bootstrapBaseFile;
 
@@ -46,13 +50,12 @@ public class BaseFileDTO {
 
     HoodieBaseFile baseFile;
     if (null != dto.fileStatus) {
-      baseFile = new HoodieBaseFile(FileStatusDTO.toFileStatus(dto.fileStatus));
+      baseFile = new HoodieBaseFile(FileStatusDTO.toFileStatus(dto.fileStatus), dto.fileId, dto.commitTime, toBaseFile(dto.bootstrapBaseFile));
     } else {
-      baseFile = new HoodieBaseFile(dto.fullPath);
+      baseFile = new HoodieBaseFile(dto.fullPath, dto.fileId, dto.commitTime, toBaseFile(dto.bootstrapBaseFile));
       baseFile.setFileLen(dto.fileLen);
     }
 
-    baseFile.setBootstrapBaseFile(toBaseFile(dto.bootstrapBaseFile));
     return baseFile;
   }
 
@@ -83,6 +86,8 @@ public class BaseFileDTO {
     if (baseFile instanceof HoodieBaseFile) {
       dto.bootstrapBaseFile = ((HoodieBaseFile)baseFile).getBootstrapBaseFile()
           .map(BaseFileDTO::fromHoodieBaseFile).orElse(null);
+      dto.fileId = ((HoodieBaseFile)baseFile).getFileId();
+      dto.commitTime = ((HoodieBaseFile)baseFile).getCommitTime();
     }
     return dto;
   }

@@ -49,22 +49,29 @@ public class HoodieBaseFile extends BaseFile {
   }
 
   public HoodieBaseFile(FileStatus fileStatus, BaseFile bootstrapBaseFile) {
-    super(handleExternallyGeneratedFileName(fileStatus));
-    this.bootstrapBaseFile = Option.ofNullable(bootstrapBaseFile);
-    this.fileId = FSUtils.getFileId(fileStatus.getPath().getName());
-    this.commitTime = FSUtils.getCommitTime(fileStatus.getPath().getName());
+    this(fileStatus, FSUtils.getFileId(fileStatus.getPath().getName()), FSUtils.getCommitTime(fileStatus.getPath().getName()), bootstrapBaseFile);
   }
 
-  // TODO properly handle this case
+  public HoodieBaseFile(FileStatus fileStatus, String fileId, String commitTime, BaseFile bootstrapBaseFile) {
+    super(handleExternallyGeneratedFileName(fileStatus));
+    this.bootstrapBaseFile = Option.ofNullable(bootstrapBaseFile);
+    this.fileId = fileId;
+    this.commitTime = commitTime;
+  }
+
   public HoodieBaseFile(String filePath) {
     this(filePath, null);
   }
 
   public HoodieBaseFile(String filePath, BaseFile bootstrapBaseFile) {
-    super(handleExternallyGeneratedFileName(filePath));
+    this(filePath, FSUtils.getFileId(getFileName(filePath)), FSUtils.getCommitTime(getFileName(filePath)), bootstrapBaseFile);
+  }
+
+  public HoodieBaseFile(String filePath, String fileId, String commitTime, BaseFile bootstrapBaseFile) {
+    super(filePath);
+    this.commitTime = commitTime;
+    this.fileId = fileId;
     this.bootstrapBaseFile = Option.ofNullable(bootstrapBaseFile);
-    this.fileId = FSUtils.getFileId(getFileName(filePath));
-    this.commitTime = FSUtils.getCommitTime(getFileName(filePath));
   }
 
   private static FileStatus handleExternallyGeneratedFileName(FileStatus fileStatus) {
