@@ -49,37 +49,49 @@ public class HoodieBaseFile extends BaseFile {
   }
 
   public HoodieBaseFile(FileStatus fileStatus, BaseFile bootstrapBaseFile) {
-    super(manipulateFileStatus(fileStatus));
+    super(handleExternallyGeneratedFileName(fileStatus));
     this.bootstrapBaseFile = Option.ofNullable(bootstrapBaseFile);
-    this.fileId = FSUtils.getFileId(getFileName());
-    this.commitTime = FSUtils.getCommitTime(getFileName());
+    this.fileId = FSUtils.getFileId(fileStatus.getPath().getName());
+    this.commitTime = FSUtils.getCommitTime(fileStatus.getPath().getName());
   }
 
+  // TODO properly handle this case
   public HoodieBaseFile(String filePath) {
     this(filePath, null);
   }
 
   public HoodieBaseFile(String filePath, BaseFile bootstrapBaseFile) {
-    super(filePath);
+    super(handleExternallyGeneratedFileName(filePath));
     this.bootstrapBaseFile = Option.ofNullable(bootstrapBaseFile);
-    this.fileId = FSUtils.getFileId(getFileName());
-    this.commitTime = FSUtils.getCommitTime(getFileName());
+    this.fileId = FSUtils.getFileId(getFileName(filePath));
+    this.commitTime = FSUtils.getCommitTime(getFileName(filePath));
   }
 
-  private static FileStatus manipulateFileStatus(FileStatus fileStatus) {
+  private static FileStatus handleExternallyGeneratedFileName(FileStatus fileStatus) {
     if (fileStatus == null) {
       return null;
     }
-    if (!FSUtils.fileNameIsNewEncoding(fileStatus.getPath().getName())) {
+    String updatedFileName = handleExternallyGeneratedFileName(fileStatus.getPath().getName());
+    if (updatedFileName.equals(fileStatus.getPath().getName())) {
       return fileStatus;
     }
+
     Path parent = fileStatus.getPath().getParent();
-    String fileName = fileStatus.getPath().getName();
-    String updatedFileName = FSUtils.fileNameOriginalPath(fileName);
     return new FileStatus(fileStatus.getLen(), fileStatus.isDirectory(), fileStatus.getReplication(),
         fileStatus.getBlockSize(), fileStatus.getModificationTime(), fileStatus.getAccessTime(),
         fileStatus.getPermission(), fileStatus.getOwner(), fileStatus.getGroup(),
         new CachingPath(parent, createRelativePathUnsafe(updatedFileName)));
+  }
+
+  private static String handleExternallyGeneratedFileName(String fileName) {
+    if (!FSUtils.isExternallyCreatedFile(fileName)) {
+      return fileName;
+    }
+    return pathFromExternallyManagedFileName(fileName);
+  }
+
+  private static String pathFromExternallyManagedFileName(String fileName) {
+    return fileName.split("_")[2];
   }
 
   public String getFileId() {

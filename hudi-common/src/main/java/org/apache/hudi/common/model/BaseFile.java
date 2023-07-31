@@ -118,7 +118,7 @@ public class BaseFile implements Serializable {
     return "BaseFile{fullPath=" + fullPath + ", fileLen=" + fileLen + '}';
   }
 
-  private static String getFileName(String fullPath) {
+  protected static String getFileName(String fullPath) {
     return new Path(fullPath).getName();
   }
 }

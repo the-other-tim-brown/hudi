@@ -379,7 +379,7 @@ public class HoodieTableMetadataUtil {
 
               newFileCount.add(updatedFilesToSizesMapping.size());
               return HoodieMetadataPayload.createPartitionFilesRecord(partition, Option.of(updatedFilesToSizesMapping),
-                  Option.empty());
+                  Option.empty(), instantTime);
             })
             .collect(Collectors.toList());
 
@@ -509,7 +509,7 @@ public class HoodieTableMetadataUtil {
       // Files deleted from a partition
       List<String> deletedFiles = partitionMetadata.getDeletePathPatterns();
       HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, Option.empty(),
-          Option.of(new ArrayList<>(deletedFiles)));
+          Option.of(new ArrayList<>(deletedFiles)), instantTime);
       records.add(record);
       fileDeleteCount[0] += deletedFiles.size();
       boolean isPartitionDeleted = partitionMetadata.getIsPartitionDeleted();
@@ -542,7 +542,7 @@ public class HoodieTableMetadataUtil {
       if (filesToDelete.isPresent()) {
         fileDeleteCount[0] += filesToDelete.get().size();
       }
-      HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, Option.of(filestoAdd), filesToDelete);
+      HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, Option.of(filestoAdd), filesToDelete, instantTime);
       records.add(record);
     });
 
@@ -552,7 +552,7 @@ public class HoodieTableMetadataUtil {
       Option<List<String>> filesToDelete = Option.of(v);
       if (!filesAdded.containsKey(partition)) {
         fileDeleteCount[0] += filesToDelete.get().size();
-        HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, Option.empty(), filesToDelete);
+        HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, Option.empty(), filesToDelete, instantTime);
         records.add(record);
       }
     });
@@ -754,7 +754,7 @@ public class HoodieTableMetadataUtil {
       }
 
       HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, filesAdded,
-          Option.of(new ArrayList<>(deletedFiles)));
+          Option.of(new ArrayList<>(deletedFiles)), instantTime);
       records.add(record);
     });
 
@@ -769,7 +769,7 @@ public class HoodieTableMetadataUtil {
 
       // New files added to a partition
       HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, Option.of(appendedFileMap),
-          Option.empty());
+          Option.empty(), instantTime);
       records.add(record);
     });
 

@@ -393,7 +393,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       try {
         switch (partitionType) {
           case FILES:
-            fileGroupCountAndRecordsPair = initializeFilesPartition(partitionInfoList);
+            fileGroupCountAndRecordsPair = initializeFilesPartition(partitionInfoList, commitTimeForPartition);
             break;
           case BLOOM_FILTERS:
             fileGroupCountAndRecordsPair = initializeBloomFiltersPartition(initializationTime, partitionToFilesMap);
@@ -548,7 +548,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     });
   }
 
-  private Pair<Integer, HoodieData<HoodieRecord>> initializeFilesPartition(List<DirectoryInfo> partitionInfoList) {
+  private Pair<Integer, HoodieData<HoodieRecord>> initializeFilesPartition(List<DirectoryInfo> partitionInfoList, String commitTime) {
     // FILES partition uses a single file group
     final int fileGroupCount = 1;
 
@@ -569,7 +569,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     HoodieData<HoodieRecord> fileListRecords = engineContext.parallelize(partitionInfoList, partitionInfoList.size()).map(partitionInfo -> {
       Map<String, Long> fileNameToSizeMap = partitionInfo.getFileNameToSizeMap();
       return HoodieMetadataPayload.createPartitionFilesRecord(
-          HoodieTableMetadataUtil.getPartitionIdentifier(partitionInfo.getRelativePath()), Option.of(fileNameToSizeMap), Option.empty());
+          HoodieTableMetadataUtil.getPartitionIdentifier(partitionInfo.getRelativePath()), Option.of(fileNameToSizeMap), Option.empty(), commitTime);
     });
     ValidationUtils.checkState(fileListRecords.count() == partitions.size());
 

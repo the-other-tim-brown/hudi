@@ -199,7 +199,7 @@ public class TestExternalPaths extends HoodieClientTestBase {
     String instantTime3 = writeClient.startCommit(HoodieTimeline.REPLACE_COMMIT_ACTION, metaClient);
     String fileName3 = "file3.parquet";
     String fileId3 = fileName3;
-    String filePath3 = String.format("%s/%st", partitionPath2, fileName3);
+    String filePath3 = String.format("%s/%s", partitionPath2, fileName3);
     WriteStatus writeStatus3 = createWriteStatus(partitionPath2, filePath3, fileId3);
     JavaRDD<WriteStatus> rdd3 = createRdd(Arrays.asList(writeStatus3));
     metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime3), Option.empty());
@@ -208,7 +208,11 @@ public class TestExternalPaths extends HoodieClientTestBase {
     assertFileGroupCorrectness(instantTime3, partitionPath2, filePath3, fileId3);
 
     // clean first commit
-    String cleanTime = writeClient.startCommit(HoodieTimeline.CLEAN_ACTION, metaClient);
+    String cleanTime = HoodieActiveTimeline.createNewInstantTime();
+    HoodieCleanerPlan cleanerPlan = cleanerPlan(new HoodieActionInstant(instantTime2, HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieInstant.State.COMPLETED.name()), instantTime3,
+        Collections.singletonMap(partitionPath1, Arrays.asList(new HoodieCleanFileInfo(filePath1, false))));
+    metaClient.getActiveTimeline().saveToCleanRequested(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, cleanTime),
+        TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
     HoodieInstant inflightClean = metaClient.getActiveTimeline().transitionCleanRequestedToInflight(
         new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, cleanTime), Option.empty());
     List<HoodieCleanStat> cleanStats = Arrays.asList(createCleanStat(partitionPath1, Arrays.asList(filePath1), instantTime2, instantTime3));
