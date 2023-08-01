@@ -81,6 +81,7 @@ public class TestExternalPaths extends HoodieClientTestBase {
         .withEmbeddedTimelineServerEnabled(false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .withMaxNumDeltaCommitsBeforeCompaction(2)
+            .withFileSystemBootstrapDisabled(true)
             .enable(true).build())
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(1, 2).build())
         .withTableServicesEnabled(true)
