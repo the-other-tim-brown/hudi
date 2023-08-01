@@ -86,6 +86,7 @@ public class FSUtils {
   private static final String HOODIE_ENV_PROPS_PREFIX = "HOODIE_ENV_";
 
   private static final PathFilter ALLOW_ALL_FILTER = file -> true;
+  public static final String EXTERNAL_FILE_PREFIX = "hudiext_";
 
   public static Configuration prepareHadoopConf(Configuration conf) {
     // look for all properties, prefixed to be picked up
@@ -200,12 +201,8 @@ public class FSUtils {
     return fullFileName.split("_")[2].split("\\.")[0];
   }
 
-  public static boolean matchesHudiFilePattern(String fileName) {
-    return isLogFile(fileName) || fileName.chars().filter(ch -> ch == '_').count() == 2;
-  }
-
   public static String prefixExternalFileWithCommitTime(String fileName, String commitTime) {
-    return String.format("hudiext_%s_%s", commitTime, fileName);
+    return EXTERNAL_FILE_PREFIX + commitTime + "_" + fileName;
   }
 
   public static long getFileSize(FileSystem fs, Path path) throws IOException {
@@ -214,13 +211,13 @@ public class FSUtils {
 
   public static String getFileId(String fullFileName) {
     if (isExternallyCreatedFile(fullFileName)) {
-      return fullFileName.split("_")[2];
+      return fullFileName.split("_", 3)[2];
     }
     return fullFileName.split("_")[0];
   }
 
   public static boolean isExternallyCreatedFile(String fullFileName) {
-    return fullFileName.startsWith("hudiext_");
+    return fullFileName.startsWith(EXTERNAL_FILE_PREFIX);
   }
 
   /**

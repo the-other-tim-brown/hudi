@@ -73,7 +73,7 @@ public class TestExternalPaths extends HoodieClientTestBase {
 
   @ParameterizedTest
   @MethodSource("getArgs")
-  public void testFlow(FileIdAndNameGenerator fileIdAndNameGenerator) throws Exception {
+  public void testFlow(FileIdAndNameGenerator fileIdAndNameGenerator, List<String> partitions) throws Exception {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     writeConfig = HoodieWriteConfig.newBuilder()
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(INMEMORY).build())
@@ -88,24 +88,24 @@ public class TestExternalPaths extends HoodieClientTestBase {
 
     writeClient = new SparkRDDWriteClient(context, writeConfig, false, Option.empty());
     String instantTime1 = writeClient.startCommit(HoodieTimeline.REPLACE_COMMIT_ACTION, metaClient);
-    String partitionPath1 = "americas/brazil";
+    String partitionPath1 = partitions.get(0);
     Pair<String, String> fileIdAndName1 = fileIdAndNameGenerator.generate(1, instantTime1);
     String fileId1 = fileIdAndName1.getLeft();
     String fileName1 = fileIdAndName1.getRight();
-    String filePath1 = String.format("%s/%s", partitionPath1, fileName1);
+    String filePath1 = getPath(partitionPath1, fileName1);
     WriteStatus writeStatus1 = createWriteStatus(partitionPath1, filePath1, fileId1);
     JavaRDD<WriteStatus> rdd1 = createRdd(Arrays.asList(writeStatus1));
     metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime1), Option.empty());
     writeClient.commit(instantTime1, rdd1, Option.empty(), HoodieTimeline.REPLACE_COMMIT_ACTION,  Collections.emptyMap());
 
-    assertFileGroupCorrectness(instantTime1, partitionPath1, filePath1, fileId1);
+    assertFileGroupCorrectness(instantTime1, partitionPath1, filePath1, fileId1, 1);
 
     // add a new file and remove the old one
     String instantTime2 = writeClient.startCommit(HoodieTimeline.REPLACE_COMMIT_ACTION, metaClient);
     Pair<String, String> fileIdAndName2 = fileIdAndNameGenerator.generate(2, instantTime2);
     String fileId2 = fileIdAndName2.getLeft();
     String fileName2 = fileIdAndName2.getRight();
-    String filePath2 = String.format("%s/%s", partitionPath1, fileName2);
+    String filePath2 = getPath(partitionPath1, fileName2);
     WriteStatus newWriteStatus = createWriteStatus(partitionPath1, filePath2, fileId2);
     JavaRDD<WriteStatus> rdd2 = createRdd(Arrays.asList(newWriteStatus));
     Map<String, List<String>> partitionToReplacedFileIds = new HashMap<>();
@@ -113,21 +113,21 @@ public class TestExternalPaths extends HoodieClientTestBase {
     metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime2), Option.empty());
     writeClient.commit(instantTime2, rdd2, Option.empty(), HoodieTimeline.REPLACE_COMMIT_ACTION, partitionToReplacedFileIds);
 
-    assertFileGroupCorrectness(instantTime2, partitionPath1, filePath2, fileId2);
+    assertFileGroupCorrectness(instantTime2, partitionPath1, filePath2, fileId2, 1);
 
     // Add file to a new partition
-    String partitionPath2 = "americas/argentina";
+    String partitionPath2 = partitions.get(1);
     String instantTime3 = writeClient.startCommit(HoodieTimeline.REPLACE_COMMIT_ACTION, metaClient);
     Pair<String, String> fileIdAndName3 = fileIdAndNameGenerator.generate(3, instantTime3);
     String fileId3 = fileIdAndName3.getLeft();
     String fileName3 = fileIdAndName3.getRight();
-    String filePath3 = String.format("%s/%s", partitionPath2, fileName3);
+    String filePath3 = getPath(partitionPath2, fileName3);
     WriteStatus writeStatus3 = createWriteStatus(partitionPath2, filePath3, fileId3);
     JavaRDD<WriteStatus> rdd3 = createRdd(Arrays.asList(writeStatus3));
     metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime3), Option.empty());
     writeClient.commit(instantTime3, rdd3, Option.empty(), HoodieTimeline.REPLACE_COMMIT_ACTION, Collections.emptyMap());
 
-    assertFileGroupCorrectness(instantTime3, partitionPath2, filePath3, fileId3);
+    assertFileGroupCorrectness(instantTime3, partitionPath2, filePath3, fileId3, partitionPath2.isEmpty() ? 2 : 1);
 
     // clean first commit
     String cleanTime = HoodieActiveTimeline.createNewInstantTime();
@@ -148,16 +148,16 @@ public class TestExternalPaths extends HoodieClientTestBase {
     metaClient.getActiveTimeline().transitionCleanInflightToComplete(inflightClean,
         TimelineMetadataUtils.serializeCleanMetadata(metadata));
     // make sure we still get the same results as before
-    assertFileGroupCorrectness(instantTime2, partitionPath1, filePath2, fileId2);
-    assertFileGroupCorrectness(instantTime3, partitionPath2, filePath3, fileId3);
+    assertFileGroupCorrectness(instantTime2, partitionPath1, filePath2, fileId2, partitionPath2.isEmpty() ? 2 : 1);
+    assertFileGroupCorrectness(instantTime3, partitionPath2, filePath3, fileId3, partitionPath2.isEmpty() ? 2 : 1);
 
     // trigger archiver manually
     writeClient.archive();
     // assert commit was archived
     Assertions.assertEquals(1, metaClient.getArchivedTimeline().reload().filterCompletedInstants().countInstants());
     // make sure we still get the same results as before
-    assertFileGroupCorrectness(instantTime2, partitionPath1, filePath2, fileId2);
-    assertFileGroupCorrectness(instantTime3, partitionPath2, filePath3, fileId3);
+    assertFileGroupCorrectness(instantTime2, partitionPath1, filePath2, fileId2, partitionPath2.isEmpty() ? 2 : 1);
+    assertFileGroupCorrectness(instantTime3, partitionPath2, filePath3, fileId3, partitionPath2.isEmpty() ? 2 : 1);
   }
 
   static Stream<Arguments> getArgs() {
@@ -167,11 +167,20 @@ public class TestExternalPaths extends HoodieClientTestBase {
       return Pair.of(fileId, fileName);
     };
     FileIdAndNameGenerator external = (index, instantTime) -> {
-      String fileName = String.format("file%d.parquet", index);
+      String fileName = String.format("file_%d.parquet", index);
       String fileId = fileName;
       return Pair.of(fileId, fileName);
     };
-    return Stream.of(Arguments.of(hudiBased), Arguments.of(external));
+    List<String> partitionedTable = Arrays.asList("americas/brazil", "americas/argentina");
+    List<String> unpartitionedTable = Arrays.asList("", "");
+    return Stream.of(Arguments.of(hudiBased, partitionedTable), Arguments.of(external, partitionedTable), Arguments.of(hudiBased, unpartitionedTable), Arguments.of(external, unpartitionedTable));
+  }
+
+  private String getPath(String partitionPath, String fileName) {
+    if (partitionPath.isEmpty()) {
+      return fileName;
+    }
+    return String.format("%s/%s", partitionPath, fileName);
   }
 
   @FunctionalInterface
@@ -179,11 +188,13 @@ public class TestExternalPaths extends HoodieClientTestBase {
     Pair<String, String> generate(int iteration, String instantTime);
   }
 
-  private void assertFileGroupCorrectness(String instantTime, String partitionPath, String filePath, String fileId) {
+  private void assertFileGroupCorrectness(String instantTime, String partitionPath, String filePath, String fileId, int expectedSize) {
     HoodieTableFileSystemView fsView = new HoodieMetadataFileSystemView(context, metaClient, metaClient.reloadActiveTimeline(), writeConfig.getMetadataConfig());
     List<HoodieFileGroup> fileGroups = fsView.getAllFileGroups(partitionPath).collect(Collectors.toList());
-    Assertions.assertEquals(1, fileGroups.size());
-    HoodieFileGroup fileGroup = fileGroups.get(0);
+    Assertions.assertEquals(expectedSize, fileGroups.size());
+    Option<HoodieFileGroup> fileGroupOption = Option.fromJavaOptional(fileGroups.stream().filter(fg -> fg.getFileGroupId().getFileId().equals(fileId)).findFirst());
+    Assertions.assertTrue(fileGroupOption.isPresent());
+    HoodieFileGroup fileGroup = fileGroupOption.get();
     Assertions.assertEquals(fileId, fileGroup.getFileGroupId().getFileId());
     Assertions.assertEquals(partitionPath, fileGroup.getPartitionPath());
     HoodieBaseFile baseFile = fileGroup.getAllBaseFiles().findFirst().get();

@@ -376,7 +376,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   }
 
   private static String handleFileName(String fileName, String commitTime) {
-    if (FSUtils.matchesHudiFilePattern(fileName)) {
+    if (FSUtils.isLogFile(fileName) || fileName.chars().filter(ch -> ch == '_').count() == 2) {
       return fileName;
     } else {
       return FSUtils.prefixExternalFileWithCommitTime(fileName, commitTime);

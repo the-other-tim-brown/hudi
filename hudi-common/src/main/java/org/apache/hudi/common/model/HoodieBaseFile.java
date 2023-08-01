@@ -98,7 +98,7 @@ public class HoodieBaseFile extends BaseFile {
   }
 
   private static String pathFromExternallyManagedFileName(String fileName) {
-    return fileName.split("_")[2];
+    return fileName.split("_", 3)[2];
   }
 
   public String getFileId() {
