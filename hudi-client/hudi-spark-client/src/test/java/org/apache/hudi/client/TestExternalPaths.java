@@ -22,12 +22,16 @@ import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanFileInfo;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
+import org.apache.hudi.avro.model.IntWrapper;
+import org.apache.hudi.avro.model.StringWrapper;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
+import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieFileGroup;
-import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -41,6 +45,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.table.action.clean.CleanPlanner;
@@ -69,6 +74,8 @@ import static org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY;
 
 public class TestExternalPaths extends HoodieClientTestBase {
 
+  private static final String FIELD_1 = "field1";
+  private static final String FIELD_2 = "field2";
   private HoodieWriteConfig writeConfig;
 
   @ParameterizedTest
@@ -82,7 +89,10 @@ public class TestExternalPaths extends HoodieClientTestBase {
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .withMaxNumDeltaCommitsBeforeCompaction(2)
             .withFileSystemBootstrapDisabled(true)
-            .enable(true).build())
+            .enable(true)
+            .withMetadataIndexColumnStats(true)
+            .withColumnStatsIndexForColumns("field1,field2")
+            .build())
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(1, 2).build())
         .withTableServicesEnabled(true)
         .build();
@@ -139,15 +149,14 @@ public class TestExternalPaths extends HoodieClientTestBase {
     HoodieInstant inflightClean = metaClient.getActiveTimeline().transitionCleanRequestedToInflight(
         new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, cleanTime), Option.empty());
     List<HoodieCleanStat> cleanStats = Arrays.asList(createCleanStat(partitionPath1, Arrays.asList(filePath1), instantTime2, instantTime3));
-    HoodieCleanMetadata metadata = CleanerUtils.convertCleanMetadata(
+    HoodieCleanMetadata cleanMetadata = CleanerUtils.convertCleanMetadata(
         cleanTime,
         Option.empty(),
-        cleanStats
-    );
+        cleanStats);
     HoodieTableMetadataWriter hoodieTableMetadataWriter = (HoodieTableMetadataWriter) writeClient.initTable(WriteOperationType.UPSERT, Option.of(cleanTime)).getMetadataWriter(cleanTime).get();
-    hoodieTableMetadataWriter.update(metadata, cleanTime);
+    hoodieTableMetadataWriter.update(cleanMetadata, cleanTime);
     metaClient.getActiveTimeline().transitionCleanInflightToComplete(inflightClean,
-        TimelineMetadataUtils.serializeCleanMetadata(metadata));
+        TimelineMetadataUtils.serializeCleanMetadata(cleanMetadata));
     // make sure we still get the same results as before
     assertFileGroupCorrectness(instantTime2, partitionPath1, filePath2, fileId2, partitionPath2.isEmpty() ? 2 : 1);
     assertFileGroupCorrectness(instantTime3, partitionPath2, filePath3, fileId3, partitionPath2.isEmpty() ? 2 : 1);
@@ -159,6 +168,12 @@ public class TestExternalPaths extends HoodieClientTestBase {
     // make sure we still get the same results as before
     assertFileGroupCorrectness(instantTime2, partitionPath1, filePath2, fileId2, partitionPath2.isEmpty() ? 2 : 1);
     assertFileGroupCorrectness(instantTime3, partitionPath2, filePath3, fileId3, partitionPath2.isEmpty() ? 2 : 1);
+
+    // assert that column stats are correct
+    HoodieBackedTableMetadata hoodieBackedTableMetadata = new HoodieBackedTableMetadata(context, writeConfig.getMetadataConfig(), writeConfig.getBasePath(), true);
+    assertEmptyColStats(hoodieBackedTableMetadata, partitionPath1, fileName1);
+    assertColStats(hoodieBackedTableMetadata, partitionPath1, fileName2);
+    assertColStats(hoodieBackedTableMetadata, partitionPath2, fileName3);
   }
 
   static Stream<Arguments> getArgs() {
@@ -203,6 +218,38 @@ public class TestExternalPaths extends HoodieClientTestBase {
     Assertions.assertEquals(metaClient.getBasePathV2().toString() + "/" + filePath, baseFile.getPath());
   }
 
+  private void assertEmptyColStats(HoodieBackedTableMetadata hoodieBackedTableMetadata, String partitionPath, String fileName) {
+    Assertions.assertTrue(hoodieBackedTableMetadata.getColumnStats(Collections.singletonList(Pair.of(partitionPath, fileName)), FIELD_1).isEmpty());
+    Assertions.assertTrue(hoodieBackedTableMetadata.getColumnStats(Collections.singletonList(Pair.of(partitionPath, fileName)), FIELD_2).isEmpty());
+  }
+
+  private void assertColStats(HoodieBackedTableMetadata hoodieBackedTableMetadata, String partitionPath, String fileName) {
+    Map<Pair<String, String>, HoodieMetadataColumnStats> field1ColStats = hoodieBackedTableMetadata.getColumnStats(Collections.singletonList(Pair.of(partitionPath, fileName)), FIELD_1);
+    Assertions.assertEquals(1, field1ColStats.size());
+    HoodieMetadataColumnStats column1stats = field1ColStats.get(Pair.of(partitionPath, fileName));
+    Assertions.assertEquals(FIELD_1, column1stats.getColumnName());
+    Assertions.assertEquals(fileName, column1stats.getFileName());
+    Assertions.assertEquals(new IntWrapper(1), column1stats.getMinValue());
+    Assertions.assertEquals(new IntWrapper(2), column1stats.getMaxValue());
+    Assertions.assertEquals(2, column1stats.getValueCount());
+    Assertions.assertEquals(0, column1stats.getNullCount());
+    Assertions.assertEquals(5, column1stats.getTotalSize());
+    Assertions.assertEquals(10, column1stats.getTotalUncompressedSize());
+
+
+    Map<Pair<String, String>, HoodieMetadataColumnStats> field2ColStats = hoodieBackedTableMetadata.getColumnStats(Collections.singletonList(Pair.of(partitionPath, fileName)), FIELD_2);
+    Assertions.assertEquals(1, field2ColStats.size());
+    HoodieMetadataColumnStats column2stats = field2ColStats.get(Pair.of(partitionPath, fileName));
+    Assertions.assertEquals(FIELD_2, column2stats.getColumnName());
+    Assertions.assertEquals(fileName, column2stats.getFileName());
+    Assertions.assertEquals(new StringWrapper("a"), column2stats.getMinValue());
+    Assertions.assertEquals(new StringWrapper("b"), column2stats.getMaxValue());
+    Assertions.assertEquals(3, column2stats.getValueCount());
+    Assertions.assertEquals(1, column2stats.getNullCount());
+    Assertions.assertEquals(10, column2stats.getTotalSize());
+    Assertions.assertEquals(20, column2stats.getTotalUncompressedSize());
+  }
+
   private JavaRDD<WriteStatus> createRdd(List<WriteStatus> writeStatuses) {
     Dataset<WriteStatus> dsw = sparkSession.createDataset(writeStatuses, Encoders.javaSerialization(WriteStatus.class));
     return new JavaRDD<>(dsw.rdd(), ClassTag.apply(WriteStatus.class));
@@ -212,7 +259,7 @@ public class TestExternalPaths extends HoodieClientTestBase {
     WriteStatus writeStatus = new WriteStatus();
     writeStatus.setFileId(fileId);
     writeStatus.setPartitionPath(partitionPath);
-    HoodieWriteStat writeStat = new HoodieWriteStat();
+    HoodieDeltaWriteStat writeStat = new HoodieDeltaWriteStat();
     writeStat.setFileId(fileId);
     writeStat.setPath(filePath);
     writeStat.setPartitionPath(partitionPath);
@@ -230,6 +277,10 @@ public class TestExternalPaths extends HoodieClientTestBase {
     writeStat.setTotalUpdatedRecordsCompacted(0);
     writeStat.setTotalCorruptLogBlock(0);
     writeStat.setTotalRollbackBlocks(0);
+    Map<String, HoodieColumnRangeMetadata<Comparable>> stats = new HashMap<>();
+    stats.put(FIELD_1, HoodieColumnRangeMetadata.<Comparable>create(filePath, FIELD_1, 1, 2, 0, 2, 5, 10));
+    stats.put(FIELD_2, HoodieColumnRangeMetadata.<Comparable>create(filePath, FIELD_2, "a", "b", 1, 3, 10, 20));
+    writeStat.putRecordsStats(stats);
     writeStatus.setStat(writeStat);
     return writeStatus;
   }
@@ -237,7 +288,7 @@ public class TestExternalPaths extends HoodieClientTestBase {
   private HoodieCleanStat createCleanStat(String partitionPath, List<String> deletePaths, String earliestCommitToRetain, String lastCompletedCommitTimestamp) {
     // TODO is path supposed to be the file name or include the partition path? Is it consistent between commit types?
     List<String> pathsWithoutPartition = deletePaths.stream().map(path -> path.substring(partitionPath.length() + 1)).collect(Collectors.toList());
-    return new HoodieCleanStat(HoodieCleaningPolicy.KEEP_LATEST_COMMITS, partitionPath, pathsWithoutPartition, pathsWithoutPartition, Collections.emptyList(),
+    return new HoodieCleanStat(HoodieCleaningPolicy.KEEP_LATEST_COMMITS, partitionPath, deletePaths, deletePaths, Collections.emptyList(),
         earliestCommitToRetain, lastCompletedCommitTimestamp);
   }
 
