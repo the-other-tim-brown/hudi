@@ -91,7 +91,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
   public abstract String getBasePath();
 
-  public abstract HoodieReaderContext<T> getHoodieReaderContext(String tablePath, Schema avroSchema, StorageConfiguration<?> storageConf);
+  public abstract HoodieReaderContext<T> getHoodieReaderContext(String tablePath, Schema avroSchema, StorageConfiguration<?> storageConf, HoodieTableConfig tableConfig);
 
   public abstract String getCustomPayload();
 
@@ -182,7 +182,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       FileSlice fileSlice = getFileSliceToRead(getStorageConf(), getBasePath(), metaClient, dataGen.getPartitionPaths(), true, 0);
       List<T> records = readRecordsFromFileGroup(getStorageConf(), getBasePath(), metaClient,  fileSlice,
           avroSchema, RecordMergeMode.COMMIT_TIME_ORDERING, false);
-      HoodieReaderContext<T> readerContext = getHoodieReaderContext(getBasePath(), avroSchema, getStorageConf());
+      HoodieReaderContext<T> readerContext = getHoodieReaderContext(getBasePath(), avroSchema, getStorageConf(), metaClient.getTableConfig(), new TypedProperties());
       Comparable orderingFieldValue = "100";
       for (Boolean isCompressionEnabled : new boolean[] {true, false}) {
         try (ExternalSpillableMap<Serializable, Pair<Option<T>, Map<String, Object>>> spillableMap =
@@ -317,7 +317,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     }
     if (shouldValidatePartialRead(fileSlice, avroSchema)) {
       assertThrows(IllegalArgumentException.class, () -> new HoodieFileGroupReader<>(
-          getHoodieReaderContext(tablePath, avroSchema, storageConf),
+          getHoodieReaderContext(tablePath, avroSchema, storageConf, ),
           metaClient.getStorage(),
           tablePath,
           metaClient.getActiveTimeline().lastInstant().get().requestedTime(),
@@ -333,7 +333,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           false));
     }
     HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
-        getHoodieReaderContext(tablePath, avroSchema, storageConf),
+        getHoodieReaderContext(tablePath, avroSchema, storageConf, ),
         metaClient.getStorage(),
         tablePath,
         metaClient.getActiveTimeline().lastInstant().get().requestedTime(),

@@ -29,6 +29,7 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.CustomPayloadForTesting;
 import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderBase;
@@ -135,7 +136,7 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
   }
 
   @Override
-  public HoodieReaderContext<ArrayWritable> getHoodieReaderContext(String tablePath, Schema avroSchema, StorageConfiguration<?> storageConf) {
+  public HoodieReaderContext<ArrayWritable> getHoodieReaderContext(String tablePath, Schema avroSchema, StorageConfiguration<?> storageConf, HoodieTableConfig tableConfig) {
     HoodieFileGroupReaderBasedRecordReader.HiveReaderCreator readerCreator = (inputSplit, jobConf) -> new MapredParquetInputFormat().getRecordReader(inputSplit, jobConf, null);
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(storageConf).setBasePath(tablePath).build();
     JobConf jobConf = new JobConf(storageConf.unwrapAs(Configuration.class));
@@ -205,7 +206,8 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
     String fileGroupId = fileSlice.getFileId();
     try {
       //prepare fg reader records to be compared to the baseline reader
-      HoodieReaderContext<ArrayWritable> readerContext = getHoodieReaderContext(tablePath, schema, storageConf);
+      HoodieTableConfig tableConfig = HoodieTableConfig.loadFromHoodieProps(storage, tablePath);
+      HoodieReaderContext<ArrayWritable> readerContext = getHoodieReaderContext(tablePath, schema, storageConf, tableConfig);
       Map<String, ArrayWritable> recordMap = new HashMap<>();
       for (ArrayWritable record : actualRecordList) {
         recordMap.put(createUniqueKey(readerContext, schema, record, isSkipMerge), record);

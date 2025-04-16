@@ -28,8 +28,11 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieSparkRecord;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.keygen.BuiltinKeyGenerator;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
@@ -41,6 +44,7 @@ import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
 
 import java.util.Map;
+import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
 import scala.Function1;
@@ -54,9 +58,12 @@ import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedSchema;
  * Subclasses need to implement {@link #getFileRecordIterator} with the reader logic.
  */
 public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderContext<InternalRow> {
+  private final BuiltinKeyGenerator keyGenerator;
 
-  protected BaseSparkInternalRowReaderContext(StorageConfiguration<?> storageConfig) {
-    super(storageConfig);
+  protected BaseSparkInternalRowReaderContext(StorageConfiguration<?> storageConfig,
+                                              HoodieTableConfig tableConfig) {
+    super(storageConfig, tableConfig);
+    this.keyGenerator = (BuiltinKeyGenerator) ReflectionUtils.loadClass(tableConfig.getKeyGeneratorClassName(), tableConfig.getProps());
   }
 
   @Override
@@ -84,12 +91,20 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
 
   @Override
   public Object getValue(InternalRow row, Schema schema, String fieldName) {
-    return getFieldValueFromInternalRow(row, schema, fieldName);
+    return getFieldValueFromInternalRow(row, getCachedSchema(schema), fieldName);
   }
 
   @Override
   public String getRecordKey(InternalRow row, Schema schema) {
-    return getFieldValueFromInternalRow(row, schema, RECORD_KEY_METADATA_FIELD).toString();
+    StructType structType = getCachedSchema(schema);
+    return getRecordKey(row, structType);
+  }
+
+  private String getRecordKey(InternalRow row, StructType schema) {
+    if (populateMetaFields) {
+      return getFieldValueFromInternalRow(row, schema, RECORD_KEY_METADATA_FIELD).toString();
+    }
+    return keyGenerator.getRecordKey(row, schema).toString();
   }
 
   @Override
@@ -108,14 +123,22 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
   }
 
   @Override
+  public Function<InternalRow, HoodieRecord<InternalRow>> recordWithKeyTransformer(Schema schema, String partition) {
+    StructType structType = HoodieInternalRowUtils.getCachedSchema(schema);
+    return input -> {
+      HoodieKey hoodieKey = new HoodieKey(getRecordKey(input, structType), partition);
+      return new HoodieSparkRecord(hoodieKey, input, structType, false);
+    };
+  }
+
+  @Override
   public InternalRow seal(InternalRow internalRow) {
     return internalRow.copy();
   }
 
-  private Object getFieldValueFromInternalRow(InternalRow row, Schema recordSchema, String fieldName) {
-    StructType structType = getCachedSchema(recordSchema);
+  private Object getFieldValueFromInternalRow(InternalRow row, StructType recordSchema, String fieldName) {
     scala.Option<HoodieUnsafeRowUtils.NestedFieldPath> cachedNestedFieldPath =
-        HoodieInternalRowUtils.getCachedPosList(structType, fieldName);
+        HoodieInternalRowUtils.getCachedPosList(recordSchema, fieldName);
     if (cachedNestedFieldPath.isDefined()) {
       HoodieUnsafeRowUtils.NestedFieldPath nestedFieldPath = cachedNestedFieldPath.get();
       return HoodieUnsafeRowUtils.getNestedInternalRowValue(row, nestedFieldPath);

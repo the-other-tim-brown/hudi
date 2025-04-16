@@ -22,6 +22,7 @@ package org.apache.hudi.common.engine;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.util.LocalAvroSchemaCache;
 import org.apache.hudi.common.util.Option;
@@ -41,6 +42,7 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
 import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
@@ -67,12 +69,15 @@ public abstract class HoodieReaderContext<T> {
   private Boolean hasBootstrapBaseFile = null;
   private Boolean needsBootstrapMerge = null;
   private Boolean shouldMergeUseRecordPosition = null;
+  protected final boolean populateMetaFields;
 
   // for encoding and decoding schemas to the spillable map
   private final LocalAvroSchemaCache localAvroSchemaCache = LocalAvroSchemaCache.getInstance();
 
-  protected HoodieReaderContext(StorageConfiguration<?> storageConfiguration) {
+  protected HoodieReaderContext(StorageConfiguration<?> storageConfiguration,
+                                HoodieTableConfig tableConfig) {
     this.storageConfiguration = storageConfiguration;
+    this.populateMetaFields = tableConfig.populateMetaFields();
   }
 
   // Getter and Setter for schemaHandler
@@ -284,6 +289,16 @@ public abstract class HoodieReaderContext<T> {
    */
   public abstract HoodieRecord<T> constructHoodieRecord(Option<T> recordOption,
                                                         Map<String, Object> metadataMap);
+
+  /**
+   * A function the engine specific context returns to aid in converting the raw data into {@link HoodieRecord<T>} with the {@link org.apache.hudi.common.model.HoodieKey} set in each record.
+   * Useful for translating the output of {@link org.apache.hudi.common.table.read.HoodieFileGroupReader<T>}.
+   *
+   * @param schema    the final schema for the records
+   * @param partition the partition these records belong to, this avoids extracting partition per record
+   * @return a function responsible for the conversion between the engine data and a HoodieRecord
+   */
+  public abstract Function<T, HoodieRecord<T>> recordWithKeyTransformer(Schema schema, String partition);
 
   /**
    * Seals the engine-specific record to make sure the data referenced in memory do not change.

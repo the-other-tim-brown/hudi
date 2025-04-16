@@ -46,6 +46,7 @@ import org.apache.avro.generic.IndexedRecord;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -124,6 +125,11 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
           appliedPayloadClass);
     }
     return new HoodieAvroIndexedRecord(recordOpt.get());
+  }
+
+  @Override
+  public Function<IndexedRecord, HoodieRecord<IndexedRecord>> recordWithKeyTransformer(Schema schema, String partition) {
+    return null; // TODO
   }
 
   @Override

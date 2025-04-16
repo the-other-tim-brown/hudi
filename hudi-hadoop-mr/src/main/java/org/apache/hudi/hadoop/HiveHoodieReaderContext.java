@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -73,6 +74,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -97,8 +99,9 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
                                     String recordKeyField,
                                     List<String> partitionCols,
                                     ObjectInspectorCache objectInspectorCache,
-                                    StorageConfiguration<?> storageConfiguration) {
-    super(storageConfiguration);
+                                    StorageConfiguration<?> storageConfiguration,
+                                    HoodieTableConfig tableConfig) {
+    super(storageConfiguration, tableConfig);
     this.readerCreator = readerCreator;
     this.partitionCols = partitionCols;
     this.partitionColSet = new HashSet<>(this.partitionCols);
@@ -229,6 +232,11 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     Schema schema = getSchemaFromMetadata(metadataMap);
     ArrayWritable writable = recordOption.get();
     return new HoodieHiveRecord(new HoodieKey((String) metadataMap.get(INTERNAL_META_RECORD_KEY), (String) metadataMap.get(INTERNAL_META_PARTITION_PATH)), writable, schema, objectInspectorCache);
+  }
+
+  @Override
+  public Function<ArrayWritable, HoodieRecord<ArrayWritable>> recordWithKeyTransformer(Schema schema, String partition) {
+    // TODO
   }
 
   @Override
