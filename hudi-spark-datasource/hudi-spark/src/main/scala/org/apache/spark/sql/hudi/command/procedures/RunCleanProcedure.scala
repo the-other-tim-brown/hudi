@@ -68,7 +68,6 @@ class RunCleanProcedure extends BaseProcedure with ProcedureBuilder with Logging
     super.checkArgs(PARAMETERS, args)
 
     val tableName = getArgValueOrDefault(args, PARAMETERS(0))
-    val skipLocking = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[Boolean]
     val scheduleInLine = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[Boolean]
     var confs: Map[String, String] = Map.empty
     if (getArgValueOrDefault(args, PARAMETERS(3)).isDefined) {
@@ -99,8 +98,7 @@ class RunCleanProcedure extends BaseProcedure with ProcedureBuilder with Logging
     try {
       client = HoodieCLIUtils.createHoodieWriteClient(sparkSession, basePath, confs,
         tableName.asInstanceOf[Option[String]])
-      val cleanInstantTime = client.createNewInstantTime()
-      val hoodieCleanMeta = client.clean(cleanInstantTime, scheduleInLine, skipLocking)
+      val hoodieCleanMeta = client.clean(scheduleInLine)
 
       if (hoodieCleanMeta == null) Seq.empty
       else Seq(Row(hoodieCleanMeta.getStartCleanTime,

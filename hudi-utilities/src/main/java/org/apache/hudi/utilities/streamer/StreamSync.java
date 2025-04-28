@@ -466,7 +466,7 @@ public class StreamSync implements Serializable, Closeable {
     try {
       // Refresh Timeline
       HoodieTableMetaClient metaClient = initializeMetaClientAndRefreshTimeline();
-      String instantTime = metaClient.createNewInstantTime();
+      String instantTime = writeClient.startCommit();
 
       Pair<InputBatch, Boolean> inputBatchAndUseRowWriter = readFromSource(instantTime, metaClient);
 
@@ -921,43 +921,8 @@ public class StreamSync implements Serializable, Closeable {
     return checkpoint.getCheckpointCommitMetadata(cfg.checkpoint, cfg.ignoreCheckpoint);
   }
 
-  /**
-   * Try to start a new commit.
-   * <p>
-   * Exception will be thrown if it failed in 2 tries.
-   *
-   * @return Instant time of the commit
-   */
-  private String startCommit(String instantTime, boolean retryEnabled) {
-    final int maxRetries = 2;
-    int retryNum = 1;
-    RuntimeException lastException = null;
-    while (retryNum <= maxRetries) {
-      try {
-        String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
-        writeClient.startCommitWithTime(instantTime, commitActionType);
-        return instantTime;
-      } catch (IllegalArgumentException ie) {
-        lastException = ie;
-        if (!retryEnabled) {
-          throw ie;
-        }
-        LOG.error("Got error trying to start a new commit. Retrying after sleeping for a sec", ie);
-        retryNum++;
-        try {
-          Thread.sleep(1000);
-        } catch (InterruptedException e) {
-          // No-Op
-        }
-      }
-      instantTime = writeClient.createNewInstantTime();
-    }
-    throw lastException;
-  }
-
   private WriteClientWriteResult writeToSink(InputBatch inputBatch, String instantTime, boolean useRowWriter) {
     WriteClientWriteResult writeClientWriteResult = null;
-    instantTime = startCommit(instantTime, !autoGenerateRecordKeys);
 
     if (useRowWriter) {
       Dataset<Row> df = (Dataset<Row>) inputBatch.getBatch().orElseGet(() -> hoodieSparkContext.getSqlContext().emptyDataFrame());

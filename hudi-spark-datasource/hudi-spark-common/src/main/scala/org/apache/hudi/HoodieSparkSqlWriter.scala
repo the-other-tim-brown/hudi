@@ -413,9 +413,8 @@ class HoodieSparkSqlWriterInternal {
               streamingWritesParamsOpt.map(_.asyncClusteringTriggerFn.get.apply(client))
             }
 
-            instantTime = client.createNewInstantTime()
             // Issue deletes
-            client.startCommitWithTime(instantTime, commitActionType)
+            instantTime = client.startCommit(commitActionType, tableMetaClient)
             val writeStatuses = DataSourceUtils.doDeleteOperation(client, hoodieKeysAndLocationsToDelete, instantTime, preppedSparkSqlWrites || preppedWriteOperation)
             (writeStatuses, client)
 
@@ -445,8 +444,7 @@ class HoodieSparkSqlWriterInternal {
                 (parameters - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key).asJava))
               .asInstanceOf[SparkRDDWriteClient[_]]
             // Issue delete partitions
-            instantTime = client.createNewInstantTime()
-            client.startCommitWithTime(instantTime, commitActionType)
+            instantTime = client.startCommit(commitActionType, tableMetaClient)
             val writeStatuses = DataSourceUtils.doDeletePartitionsOperation(client, partitionsToDelete, instantTime)
             (writeStatuses, client)
 
@@ -508,7 +506,7 @@ class HoodieSparkSqlWriterInternal {
             if (writeConfig.getRecordMerger.getRecordType == HoodieRecordType.SPARK && tableType == MERGE_ON_READ && writeConfig.getLogDataBlockFormat.orElse(HoodieLogBlockType.AVRO_DATA_BLOCK) != HoodieLogBlockType.PARQUET_DATA_BLOCK) {
               throw new UnsupportedOperationException(s"${writeConfig.getRecordMerger.getClass.getName} only support parquet log.")
             }
-            instantTime = client.createNewInstantTime()
+            instantTime = client.startCommit(commitActionType, tableMetaClient)
             // Convert to RDD[HoodieRecord]
             val hoodieRecords = Try(HoodieCreateRecordUtils.createHoodieRecordRdd(
               HoodieCreateRecordUtils.createHoodieRecordRddArgs(df, writeConfig, parameters, avroRecordName,
@@ -520,7 +518,6 @@ class HoodieSparkSqlWriterInternal {
 
             // Remove duplicates from incoming records based on existing keys from storage.
             val dedupedHoodieRecords = handleInsertDuplicates(hoodieRecords, hoodieConfig, operation, jsc, parameters)
-            client.startCommitWithTime(instantTime, commitActionType)
             try {
               val writeResult = DataSourceUtils.doWriteOperation(client, dedupedHoodieRecords, instantTime, operation,
                 preppedSparkSqlWrites || preppedWriteOperation)

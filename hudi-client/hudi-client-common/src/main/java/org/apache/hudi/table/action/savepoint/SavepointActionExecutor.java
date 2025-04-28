@@ -138,6 +138,7 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
         }, null);
       }
 
+      // TODO does savepoint require transaction?
       HoodieSavepointMetadata metadata = TimelineMetadataUtils.convertSavepointMetadata(user, comment, latestFilesMap);
       // Nothing to save in the savepoint
       table.getActiveTimeline().createNewInstant(

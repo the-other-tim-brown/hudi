@@ -133,13 +133,13 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
 
   @Override
   public void createCompleteInstant(HoodieInstant instant) {
-    LOG.info("Creating a new complete instant " + instant);
+    LOG.info("Creating a new complete instant {}", instant);
     createCompleteFileInMetaPath(true, instant, Option.empty());
   }
 
   @Override
   public void createNewInstant(HoodieInstant instant) {
-    LOG.info("Creating a new instant " + instant);
+    LOG.info("Creating a new instant {}", instant);
     ValidationUtils.checkArgument(!instant.isCompleted());
     createFileInMetaPath(instantFileNameGenerator.getFileName(instant), Option.empty(), false);
   }
@@ -147,7 +147,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
   @Override
   public void createRequestedCommitWithReplaceMetadata(String instantTime, String actionType) {
     HoodieInstant instant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, actionType, instantTime);
-    LOG.info("Creating a new instant " + instant);
+    LOG.info("Creating a new instant {}", instant);
     // Create the request replace file
     createFileInMetaPath(instantFileNameGenerator.getFileName(instant), Option.of(new HoodieRequestedReplaceMetadata()), false);
   }
@@ -164,7 +164,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
         "Could not mark an already completed instant as complete again " + instant);
     HoodieInstant commitInstant = instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, instant.getAction(), instant.requestedTime());
     transitionStateToComplete(shouldLock, instant, commitInstant, metadata);
-    LOG.info("Completed " + instant);
+    LOG.info("Completed {}", instant);
   }
 
   @Override
@@ -504,7 +504,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
         StoragePath fromInstantPath = getInstantFileNamePath(fromInstantFileName);
         HoodieInstant instantWithCompletionTime =
             instantGenerator.createNewInstant(toInstant.getState(), toInstant.getAction(),
-                toInstant.requestedTime(), metaClient.createNewInstantTime(false));
+                toInstant.requestedTime(), metaClient.createNewInstantTime(false)); // TODO: does this imply completion time is not unique?
         StoragePath toInstantPath =
             getInstantFileNamePath(instantFileNameGenerator.getFileName(instantWithCompletionTime));
         boolean success = metaClient.getStorage().rename(fromInstantPath, toInstantPath);
@@ -632,7 +632,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
     createFileInMetaPath(instantFileNameGenerator.getFileName(instant), Option.of(metadata), overwrite);
   }
 
-  @Override
+  @Override // TODO update the methods so that they don't take in an instant but rather return one??
   public void saveToPendingReplaceCommit(HoodieInstant instant, HoodieRequestedReplaceMetadata metadata) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION));
     createFileInMetaPath(instantFileNameGenerator.getFileName(instant), Option.of(metadata), false);
@@ -641,6 +641,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
   @Override
   public void saveToPendingClusterCommit(HoodieInstant instant, HoodieRequestedReplaceMetadata metadata) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.CLUSTERING_ACTION));
+    metaClient.getInstantGenerator().getRequestedInstant()
     createFileInMetaPath(instantFileNameGenerator.getFileName(instant), Option.of(metadata), false);
   }
 
@@ -700,8 +701,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
     Option<HoodieInstantWriter> writerOption = getHoodieInstantWriterOption(this, metadata);
     TimeGenerator timeGenerator = TimeGenerators
         .getTimeGenerator(metaClient.getTimeGeneratorConfig(), metaClient.getStorageConf());
-    timeGenerator.consumeTime(!shouldLock, currentTimeMillis -> {
-      String completionTime = TimelineUtils.generateInstantTime(false, timeGenerator);
+    timeGenerator.consumeTime(!shouldLock, completionTime -> { // TODO consume this time?
       String fileName = instantFileNameGenerator.getFileName(completionTime, instant);
       StoragePath fullPath = getInstantFileNamePath(fileName);
       if (metaClient.getTimelineLayoutVersion().isNullVersion()) {

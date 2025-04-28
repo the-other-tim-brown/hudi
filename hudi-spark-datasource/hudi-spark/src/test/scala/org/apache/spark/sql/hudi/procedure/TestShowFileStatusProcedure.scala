@@ -89,12 +89,11 @@ class TestShowFileStatusProcedure extends HoodieSparkProcedureTestBase {
 
         spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 1001)")
         // clustering / compaction
-        val newInstant = client.createNewInstantTime()
         if (tableType.equals("cow")) {
-          client.scheduleClusteringAtInstant(newInstant, HOption.empty())
+          val newInstant = client.scheduleClustering(HOption.empty()).get()
           client.cluster(newInstant)
         } else {
-          client.scheduleCompactionAtInstant(newInstant, HOption.empty())
+          val newInstant = client.scheduleCompaction(HOption.empty()).get()
           client.compact(newInstant)
         }
 
@@ -193,12 +192,11 @@ class TestShowFileStatusProcedure extends HoodieSparkProcedureTestBase {
 
         spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 1000)")
         // clustering / compaction
-        val newInstant = client.createNewInstantTime()
         if (tableType.equals("cow")) {
-          client.scheduleClusteringAtInstant(newInstant, HOption.empty())
+          val newInstant = client.scheduleClustering(HOption.empty()).get()
           client.cluster(newInstant)
         } else {
-          client.scheduleCompactionAtInstant(newInstant, HOption.empty())
+          val newInstant = client.scheduleCompaction(HOption.empty()).get()
           client.compact(newInstant)
         }
 

@@ -538,7 +538,7 @@ public class TimelineUtils {
    * @param timeGenerator TimeGenerator used to generate the instant time.
    * @param milliseconds  Milliseconds to add to current time while generating the new instant time
    */
-  public static String generateInstantTime(boolean shouldLock, TimeGenerator timeGenerator, long milliseconds) {
+  private static String generateInstantTime(boolean shouldLock, TimeGenerator timeGenerator, long milliseconds) {
     return HoodieInstantTimeGenerator.createNewInstantTime(shouldLock, timeGenerator, milliseconds);
   }
 

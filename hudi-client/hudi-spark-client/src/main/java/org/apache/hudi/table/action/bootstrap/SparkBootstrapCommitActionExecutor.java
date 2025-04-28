@@ -123,6 +123,7 @@ public class SparkBootstrapCommitActionExecutor<T>
               + "If you want to re-bootstrap, please rollback bootstrap first !!");
       Map<BootstrapMode, List<Pair<String, List<HoodieFileStatus>>>> partitionSelections = listAndProcessSourcePartitions();
 
+      // TODO: needs txn?
       // First run metadata bootstrap which will auto commit
       Option<HoodieWriteMetadata<HoodieData<WriteStatus>>> metadataResult = metadataBootstrap(partitionSelections.get(METADATA_ONLY));
       // if there are full bootstrap to be performed, perform that too

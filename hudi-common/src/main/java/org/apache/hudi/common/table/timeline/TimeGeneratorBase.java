@@ -66,10 +66,11 @@ public abstract class TimeGeneratorBase implements TimeGenerator, Serializable {
 
   private final RetryHelper<Boolean, HoodieLockException> lockRetryHelper;
 
-  public TimeGeneratorBase(HoodieTimeGeneratorConfig config, StorageConfiguration<?> storageConf) {
+  public TimeGeneratorBase(HoodieTimeGeneratorConfig config, StorageConfiguration<?> storageConf, LockProvider<?> lockProvider) {
     this.config = config;
     this.lockConfiguration = config.getLockConfiguration();
     this.storageConf = storageConf;
+    this.lockProvider = lockProvider;
 
     // The maximum times to retry in case there are failures.
     int maxRetries = lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY,

@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
+import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.StorageConfiguration;
 
@@ -30,8 +31,8 @@ import java.util.function.Consumer;
 public class SkewAdjustingTimeGenerator extends TimeGeneratorBase {
   private final long maxExpectedClockSkewMs;
 
-  public SkewAdjustingTimeGenerator(HoodieTimeGeneratorConfig config, StorageConfiguration<?> storageConf) {
-    super(config, storageConf);
+  public SkewAdjustingTimeGenerator(HoodieTimeGeneratorConfig config, StorageConfiguration<?> storageConf, LockProvider<?> lockProvider) {
+    super(config, storageConf, lockProvider);
     this.maxExpectedClockSkewMs = config.getMaxExpectedClockSkewMs();
   }
 

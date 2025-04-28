@@ -50,6 +50,7 @@ public class TransactionManager implements Serializable {
     this.isLockRequired = isLockRequired;
   }
 
+  // TODO: how do we handle the case where the instant is not generated? planning generates instant after starting the transaction
   public void beginTransaction(Option<HoodieInstant> newTxnOwnerInstant,
                                Option<HoodieInstant> lastCompletedTxnOwnerInstant) {
     if (isLockRequired) {

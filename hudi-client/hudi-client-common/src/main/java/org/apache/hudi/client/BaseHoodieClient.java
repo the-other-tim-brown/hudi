@@ -102,7 +102,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
     this.metrics = new HoodieMetrics(config, storage);
     this.txnManager = new TransactionManager(config, storage);
     this.timeGenerator = TimeGenerators.getTimeGenerator(
-        config.getTimeGeneratorConfig(), storageConf);
+        config.getTimeGeneratorConfig(), storageConf, txnManager.getLockManager().getLockProvider());
     startEmbeddedServerView();
     initWrapperFSMetrics();
     runClientInitCallbacks();
