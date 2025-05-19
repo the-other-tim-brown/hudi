@@ -1094,6 +1094,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
                           boolean skipLocking, boolean skipVersionCheck) throws HoodieRollbackException {
     LOG.info("Begin rollback of instant {} for table {}", commitInstantTime, config.getBasePath());
     final Timer.Context timerContext = this.metrics.getRollbackCtx();
+    // TODO: move rollbackInstantTime?
     try {
       HoodieTable table = createTable(config, storageConf, skipVersionCheck);
       Option<HoodieInstant> commitInstantOpt = Option.fromJavaOptional(table.getActiveTimeline().getCommitsTimeline().getInstantsAsStream()
