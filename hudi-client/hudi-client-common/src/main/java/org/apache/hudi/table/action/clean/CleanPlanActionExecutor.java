@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.versioning.v1.InstantComparatorV1;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -184,24 +183,27 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
   protected Option<HoodieCleanerPlan> requestClean(String startCleanTime) {
     // Check if the last clean completed successfully and wrote out its metadata. If not, it should be retried.
     Option<HoodieInstant> lastClean = table.getCleanTimeline().filterCompletedInstants().lastInstant();
-    if (lastClean.isPresent()) {
+    while (lastClean.map(table.getActiveTimeline()::isEmpty).orElse(false)) {
       HoodieInstant cleanInstant = lastClean.get();
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
-      if (activeTimeline.isEmpty(cleanInstant)) {
-        activeTimeline.deleteEmptyInstantIfExists(cleanInstant);
-        HoodieInstant cleanPlanInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, cleanInstant.getAction(), cleanInstant.requestedTime(), InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
-        try {
-          // Deserialize plan.
-          return Option.of(activeTimeline.readCleanerPlan(cleanPlanInstant));
-        } catch (IOException ex) {
-          // If it is empty we catch error and repair.
-          if (activeTimeline.isEmpty(cleanPlanInstant)) {
-            return Option.of(new HoodieCleanerPlan());
-          }
+      activeTimeline.deleteEmptyInstantIfExists(cleanInstant);
+      HoodieInstant cleanPlanInstant = instantGenerator.getCleanRequestedInstant(cleanInstant.requestedTime());
+      try {
+        // Deserialize plan.
+        return Option.of(activeTimeline.readCleanerPlan(cleanPlanInstant));
+      } catch (IOException ex) {
+        // If it is empty we catch error and repair by deleting the empty plan and inflight instant.
+        if (activeTimeline.isEmpty(cleanPlanInstant)) {
+          activeTimeline.deleteEmptyInstantIfExists(instantGenerator.getCleanInflightInstant(cleanInstant.requestedTime()));
+          activeTimeline.deleteEmptyInstantIfExists(cleanPlanInstant);
+        } else {
           throw new HoodieIOException("Failed to parse cleaner plan", ex);
         }
       }
+      table.getMetaClient().reloadActiveTimeline();
+      lastClean = table.getCleanTimeline().filterCompletedInstants().lastInstant();
     }
+
     final HoodieCleanerPlan cleanerPlan = requestClean(context);
     Option<HoodieCleanerPlan> option = Option.empty();
     if (nonEmpty(cleanerPlan.getFilePathsToBeDeletedPerPartition())
