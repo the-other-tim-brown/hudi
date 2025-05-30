@@ -678,7 +678,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     }
     // Only applicable for SI or EI
     checkArgument(indexName.startsWith(PARTITION_NAME_EXPRESSION_INDEX_PREFIX)
-        || indexName.startsWith(PARTITION_NAME_SECONDARY_INDEX_PREFIX), "Unexpected index name to drop: " + indexName);
+        || indexName.startsWith(PARTITION_NAME_SECONDARY_INDEX_PREFIX), () -> "Unexpected index name to drop: " + indexName);
     return subIndexNameToDrop.contains(indexName);
   }
 

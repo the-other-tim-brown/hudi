@@ -72,7 +72,7 @@ public class MarkerUtils {
    */
   public static String stripMarkerFolderPrefix(String fullMarkerPath, String basePath, String instantTime) {
     ValidationUtils.checkArgument(fullMarkerPath.contains(HoodieTableMetaClient.MARKER_EXTN),
-        String.format("Using DIRECT markers but marker path does not contain extension: %s",
+        () -> String.format("Using DIRECT markers but marker path does not contain extension: %s",
             HoodieTableMetaClient.MARKER_EXTN));
     String markerRootPath = new StoragePath(
         String.format("%s/%s/%s", basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, instantTime))
@@ -90,7 +90,7 @@ public class MarkerUtils {
   public static String stripMarkerFolderPrefix(String fullMarkerPath, String markerDir) {
     int begin = fullMarkerPath.indexOf(markerDir);
     ValidationUtils.checkArgument(begin >= 0,
-        "Not in marker dir. Marker Path=" + fullMarkerPath + ", Expected Marker Root=" + markerDir);
+        () -> "Not in marker dir. Marker Path=" + fullMarkerPath + ", Expected Marker Root=" + markerDir);
     return fullMarkerPath.substring(begin + markerDir.length() + 1);
   }
 

@@ -204,7 +204,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     //       records matching the key-prefix
     List<FileSlice> partitionFileSlices = partitionFileSliceMap.computeIfAbsent(partitionName,
         k -> HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, getMetadataFileSystemView(), partitionName));
-    checkState(!partitionFileSlices.isEmpty(), "Number of file slices for partition " + partitionName + " should be > 0");
+    checkState(!partitionFileSlices.isEmpty(), () -> "Number of file slices for partition " + partitionName + " should be > 0");
 
     return (shouldLoadInMemory ? HoodieListData.lazy(partitionFileSlices) :
         getEngineContext().parallelize(partitionFileSlices))
@@ -256,7 +256,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     List<FileSlice> partitionFileSlices = partitionFileSliceMap.computeIfAbsent(partitionName,
         k -> HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, getMetadataFileSystemView(), partitionName));
     final int numFileSlices = partitionFileSlices.size();
-    checkState(numFileSlices > 0, "Number of file slices for partition " + partitionName + " should be > 0");
+    checkState(numFileSlices > 0, () -> "Number of file slices for partition " + partitionName + " should be > 0");
 
     // Lookup keys from each file slice
     if (numFileSlices == 1) {

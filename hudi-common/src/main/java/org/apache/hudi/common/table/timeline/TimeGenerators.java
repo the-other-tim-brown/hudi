@@ -40,7 +40,7 @@ public class TimeGenerators {
 
   public static TimeGenerator getTimeGenerator(HoodieTimeGeneratorConfig timeGeneratorConfig,
                                                StorageConfiguration<?> storageConf) {
-    ValidationUtils.checkState(timeGeneratorConfig.contains(BASE_PATH), "Option [" + BASE_PATH.key() + "] is required");
+    ValidationUtils.checkState(timeGeneratorConfig.contains(BASE_PATH), () -> "Option [" + BASE_PATH.key() + "] is required");
     ValidationUtils.checkArgument(storageConf != null, "Hadoop configuration is required");
     if (timeGeneratorConfig.canReuseTimeGenerator()) {
       return TIME_GENERATOR_CACHE.get(timeGeneratorConfig.getBasePath(), s -> getNewTimeGenerator(timeGeneratorConfig, storageConf));

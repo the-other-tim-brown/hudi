@@ -138,7 +138,7 @@ public enum MetadataPartitionType {
       //       Otherwise, it has to be present or the record would be considered invalid
       if (bloomFilterRecord == null) {
         checkArgument(record.getSchema().getField(SCHEMA_FIELD_ID_BLOOM_FILTER) == null,
-            String.format("Valid %s record expected for type: %s", SCHEMA_FIELD_ID_BLOOM_FILTER, MetadataPartitionType.BLOOM_FILTERS.getRecordType()));
+            () -> String.format("Valid %s record expected for type: %s", SCHEMA_FIELD_ID_BLOOM_FILTER, MetadataPartitionType.BLOOM_FILTERS.getRecordType()));
       } else {
         payload.bloomFilterMetadata = new HoodieMetadataBloomFilter(
             (String) bloomFilterRecord.get(BLOOM_FILTER_FIELD_TYPE),
@@ -195,7 +195,7 @@ public enum MetadataPartitionType {
 
     @Override
     public String getPartitionPath(HoodieTableMetaClient metaClient, String indexName) {
-      checkArgument(metaClient.getIndexMetadata().isPresent(), "Index definition is not present for index: " + indexName);
+      checkArgument(metaClient.getIndexMetadata().isPresent(), () -> "Index definition is not present for index: " + indexName);
       return metaClient.getIndexMetadata().get().getIndexDefinitions().get(indexName).getIndexName();
     }
   },
@@ -223,7 +223,7 @@ public enum MetadataPartitionType {
 
     @Override
     public String getPartitionPath(HoodieTableMetaClient metaClient, String indexName) {
-      checkArgument(metaClient.getIndexMetadata().isPresent(), "Index definition is not present for index: " + indexName);
+      checkArgument(metaClient.getIndexMetadata().isPresent(), () -> "Index definition is not present for index: " + indexName);
       return metaClient.getIndexMetadata().get().getIndexDefinitions().get(indexName).getIndexName();
     }
   },
@@ -294,7 +294,7 @@ public enum MetadataPartitionType {
     //       Otherwise, it has to be present or the record would be considered invalid
     if (columnStatsRecord == null) {
       checkArgument(record.getSchema().getField(SCHEMA_FIELD_ID_COLUMN_STATS) == null,
-          String.format("Valid %s record expected for type: %s", SCHEMA_FIELD_ID_COLUMN_STATS, MetadataPartitionType.COLUMN_STATS.getRecordType()));
+          () -> String.format("Valid %s record expected for type: %s", SCHEMA_FIELD_ID_COLUMN_STATS, MetadataPartitionType.COLUMN_STATS.getRecordType()));
     } else {
       HoodieMetadataColumnStats.Builder columnStatsBuilder = HoodieMetadataColumnStats.newBuilder(METADATA_COLUMN_STATS_BUILDER_STUB.get())
           .setFileName(columnStatsRecord.get(COLUMN_STATS_FIELD_FILE_NAME).toString())
@@ -323,7 +323,7 @@ public enum MetadataPartitionType {
    */
   public String getIndexNameWithoutPrefix(HoodieIndexDefinition indexDefinition) {
     String indexName = indexDefinition.getIndexName();
-    ValidationUtils.checkArgument(indexName.startsWith(partitionPath), String.format("Index Name %s does not start with partition path %s", indexName, partitionPath));
+    ValidationUtils.checkArgument(indexName.startsWith(partitionPath), () -> String.format("Index Name %s does not start with partition path %s", indexName, partitionPath));
     if (indexDefinition.getIndexName().length() > partitionPath.length()) {
       return indexDefinition.getIndexName().substring(partitionPath.length());
     }

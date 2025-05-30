@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -38,22 +37,16 @@ import org.apache.avro.io.Encoder;
 import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.specific.SpecificDatumWriter;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import java.util.zip.Deflater;
-import java.util.zip.DeflaterOutputStream;
-import java.util.zip.InflaterInputStream;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.createHoodieRecordFromAvro;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
-import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * Example row change event based on some example data used by testcases. The data avro schema is
@@ -69,16 +62,14 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   private String partitionPath;
   private String rowKey;
-  private byte[] jsonDataCompressed;
-  private int dataSize;
+  private String jsonData;
   private boolean isDeleted;
   private Comparable orderingVal;
 
   public RawTripTestPayload(Option<String> jsonData, String rowKey, String partitionPath, String schemaStr,
-      Boolean isDeleted, Comparable orderingVal) throws IOException {
+      boolean isDeleted, Comparable orderingVal) throws IOException {
     if (jsonData.isPresent()) {
-      this.jsonDataCompressed = compressData(jsonData.get());
-      this.dataSize = jsonData.get().length();
+      this.jsonData = jsonData.get();
     }
     this.rowKey = rowKey;
     this.partitionPath = partitionPath;
@@ -91,8 +82,7 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
   }
 
   public RawTripTestPayload(String jsonData) throws IOException {
-    this.jsonDataCompressed = compressData(jsonData);
-    this.dataSize = jsonData.length();
+    this.jsonData = jsonData;
     Map<String, Object> jsonRecordMap = OBJECT_MAPPER.readValue(jsonData, Map.class);
     this.rowKey = jsonRecordMap.get("_row_key").toString();
     this.partitionPath = extractPartitionFromTimeField(jsonRecordMap.get("time").toString());
@@ -118,8 +108,7 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
         }
       }
       jsonData = OBJECT_MAPPER.writeValueAsString(jsonRecordMap);
-      this.jsonDataCompressed = compressData(jsonData);
-      this.dataSize = jsonData.length();
+      this.jsonData = jsonData;
       this.rowKey = jsonRecordMap.get("_row_key").toString();
       this.partitionPath = extractPartitionFromTimeField(jsonRecordMap.get("time").toString());
       this.isDeleted = false;
@@ -153,10 +142,7 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
   public static Option<String> recordToString(HoodieRecord record) {
     try {
       String str = ((RawTripTestPayload) record.getData()).getJsonData();
-      str = "{" + str.substring(str.indexOf("\"timestamp\":"));
-      // Remove the last } bracket
-      str = str.substring(0, str.length() - 1);
-      return Option.of(str + ", \"partition\": \"" + record.getPartitionPath() + "\"}");
+      return Option.of(str.substring(0, str.length() - 1) + ", \"partition\": \"" + record.getPartitionPath() + "\"}");
     } catch (IOException e) {
       return Option.empty();
     }
@@ -235,37 +221,16 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
   }
 
   public String getJsonData() throws IOException {
-    return unCompressData(jsonDataCompressed);
+    return jsonData;
   }
 
   public Map<String, Object> getJsonDataAsMap() throws IOException {
-    if (jsonDataCompressed == null) {
-      return Collections.emptyMap();
-    }
-    return OBJECT_MAPPER.readValue(getJsonData(), Map.class);
-  }
-
-  private byte[] compressData(String jsonData) throws IOException {
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    DeflaterOutputStream dos = new DeflaterOutputStream(baos, new Deflater(Deflater.BEST_COMPRESSION), true);
-    try {
-      dos.write(getUTF8Bytes(jsonData));
-    } finally {
-      dos.flush();
-      dos.close();
-    }
-    return baos.toByteArray();
-  }
-
-  private String unCompressData(byte[] data) throws IOException {
-    try (InflaterInputStream iis = new InflaterInputStream(new ByteArrayInputStream(data))) {
-      return FileIOUtils.readAsUTFString(iis, dataSize);
-    }
+    return OBJECT_MAPPER.readValue(jsonData, Map.class);
   }
 
   public RawTripTestPayload clone() {
     try {
-      return new RawTripTestPayload(unCompressData(jsonDataCompressed), rowKey, partitionPath, null);
+      return new RawTripTestPayload(jsonData, rowKey, partitionPath, null);
     } catch (IOException e) {
       return null;
     }

@@ -435,9 +435,9 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
 
   @Override
   public HoodieInstant transitionRestoreRequestedToInflight(HoodieInstant requestedInstant) {
-    ValidationUtils.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.RESTORE_ACTION), "Transition to inflight requested for a restore instant with diff action "
+    ValidationUtils.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.RESTORE_ACTION), () -> "Transition to inflight requested for a restore instant with diff action "
         + requestedInstant);
-    ValidationUtils.checkArgument(requestedInstant.isRequested(), "Transition to inflight requested for an instant not in requested state " + requestedInstant);
+    ValidationUtils.checkArgument(requestedInstant.isRequested(), () -> "Transition to inflight requested for an instant not in requested state " + requestedInstant);
     HoodieInstant inflight = instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, RESTORE_ACTION, requestedInstant.requestedTime());
     transitionState(requestedInstant, inflight, Option.empty());
     return inflight;

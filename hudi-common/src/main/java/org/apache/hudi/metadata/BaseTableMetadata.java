@@ -299,7 +299,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
         "Record index is not initialized in MDT");
     ValidationUtils.checkState(
         dataMetaClient.getTableConfig().getMetadataPartitions().contains(partitionName),
-        "Secondary index is not initialized in MDT for: " + partitionName);
+        () -> "Secondary index is not initialized in MDT for: " + partitionName);
     // Fetch secondary-index records
     Map<String, Set<String>> secondaryKeyRecords = getSecondaryIndexRecords(secondaryKeys, partitionName);
     // Now collect the record-keys and fetch the RLI records

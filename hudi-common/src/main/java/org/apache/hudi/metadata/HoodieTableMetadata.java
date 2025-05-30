@@ -98,7 +98,7 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    */
   static String getDatasetBasePath(String metadataTableBasePath) {
     int endPos = metadataTableBasePath.lastIndexOf(StoragePath.SEPARATOR + HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH);
-    checkState(endPos != -1, metadataTableBasePath + " should be base path of the metadata table");
+    checkState(endPos != -1, () -> metadataTableBasePath + " should be base path of the metadata table");
     return metadataTableBasePath.substring(0, endPos);
   }
 

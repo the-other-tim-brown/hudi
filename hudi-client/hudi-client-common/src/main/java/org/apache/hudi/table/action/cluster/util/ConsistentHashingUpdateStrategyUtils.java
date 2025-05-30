@@ -80,17 +80,17 @@ public class ConsistentHashingUpdateStrategyUtils {
     for (HoodieClusteringGroup group : plan.getInputGroups()) {
       Map<String, String> groupMeta = group.getExtraMetadata();
       String p = groupMeta.get(BaseConsistentHashingBucketClusteringPlanStrategy.METADATA_PARTITION_KEY);
-      ValidationUtils.checkState(p != null, "Clustering plan does not has partition info, plan: " + plan);
+      ValidationUtils.checkState(p != null, () -> "Clustering plan does not has partition info, plan: " + plan);
       // Skip unrelated clustering group
       if (!recordPartitions.contains(p)) {
         continue;
       }
 
       String preInstant = partitionToInstant.putIfAbsent(p, instant);
-      ValidationUtils.checkState(preInstant == null || preInstant.equals(instant), "Find a partition: " + p + " with two clustering instants");
+      ValidationUtils.checkState(preInstant == null || preInstant.equals(instant), () -> "Find a partition: " + p + " with two clustering instants");
       if (!partitionToHashingMeta.containsKey(p)) {
         Option<HoodieConsistentHashingMetadata> metadataOption = ConsistentBucketIndexUtils.loadMetadata(table, p);
-        ValidationUtils.checkState(metadataOption.isPresent(), "Failed to load consistent hashing metadata for partition: " + p);
+        ValidationUtils.checkState(metadataOption.isPresent(), () -> "Failed to load consistent hashing metadata for partition: " + p);
         partitionToHashingMeta.put(p, metadataOption.get());
       }
 

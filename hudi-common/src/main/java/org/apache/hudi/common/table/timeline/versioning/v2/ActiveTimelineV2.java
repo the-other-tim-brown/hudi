@@ -171,10 +171,10 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
   public <T> void saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata, Option<String> completionTimeOpt) {
     LOG.info("Marking instant complete {}", instant);
     ValidationUtils.checkArgument(instant.isInflight(),
-        "Could not mark an already completed instant as complete again " + instant);
+        () -> "Could not mark an already completed instant as complete again " + instant);
     HoodieInstant commitInstant = instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, instant.getAction(), instant.requestedTime());
     transitionStateToComplete(shouldLock, instant, commitInstant, metadata, completionTimeOpt);
-    LOG.info("Completed " + instant);
+    LOG.info("Completed {}", instant);
   }
 
   @Override
@@ -449,9 +449,9 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
 
   @Override
   public HoodieInstant transitionRestoreRequestedToInflight(HoodieInstant requestedInstant) {
-    ValidationUtils.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.RESTORE_ACTION), "Transition to inflight requested for a restore instant with diff action "
+    ValidationUtils.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.RESTORE_ACTION), () -> "Transition to inflight requested for a restore instant with diff action "
         + requestedInstant);
-    ValidationUtils.checkArgument(requestedInstant.isRequested(), "Transition to inflight requested for an instant not in requested state " + requestedInstant);
+    ValidationUtils.checkArgument(requestedInstant.isRequested(), () -> "Transition to inflight requested for an instant not in requested state " + requestedInstant);
     HoodieInstant inflight = instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, RESTORE_ACTION, requestedInstant.requestedTime());
     transitionPendingState(requestedInstant, inflight, Option.empty());
     return inflight;
@@ -509,7 +509,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
 
   protected <T> void transitionStateToComplete(boolean shouldLock, HoodieInstant fromInstant, HoodieInstant toInstant, Option<T> metadata,
                                                Option<String> completionTimeOpt) {
-    ValidationUtils.checkArgument(fromInstant.requestedTime().equals(toInstant.requestedTime()), String.format("%s and %s are not consistent when transition state.", fromInstant, toInstant));
+    ValidationUtils.checkArgument(fromInstant.requestedTime().equals(toInstant.requestedTime()), () -> String.format("%s and %s are not consistent when transition state.", fromInstant, toInstant));
     String fromInstantFileName = instantFileNameGenerator.getFileName(fromInstant);
     try {
       if (metaClient.getTimelineLayoutVersion().isNullVersion()) {
@@ -529,7 +529,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
       } else {
         // Ensures old state exists in timeline
         ValidationUtils.checkArgument(
-            metaClient.getStorage().exists(getInstantFileNamePath(fromInstantFileName)),
+            metaClient.getStorage().exists(getInstantFileNamePath(fromInstantFileName)), () ->
             "File " + getInstantFileNamePath(fromInstantFileName) + " does not exist!");
         createCompleteFileInMetaPath(shouldLock, toInstant, metadata);
       }
@@ -540,7 +540,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
 
   protected <T> void transitionPendingState(
       HoodieInstant fromInstant, HoodieInstant toInstant, Option<T> metadata, boolean allowRedundantTransitions) {
-    ValidationUtils.checkArgument(fromInstant.requestedTime().equals(toInstant.requestedTime()), String.format("%s and %s are not consistent when transition state.", fromInstant, toInstant));
+    ValidationUtils.checkArgument(fromInstant.requestedTime().equals(toInstant.requestedTime()), () -> String.format("%s and %s are not consistent when transition state.", fromInstant, toInstant));
     String fromInstantFileName = instantFileNameGenerator.getFileName(fromInstant);
     String toInstantFileName = instantFileNameGenerator.getFileName(toInstant);
     try {
@@ -557,7 +557,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
       } else {
         // Ensures old state exists in timeline
         ValidationUtils.checkArgument(storage.exists(getInstantFileNamePath(fromInstantFileName)),
-            "File " + getInstantFileNamePath(fromInstantFileName) + " does not exist!");
+            () -> "File " + getInstantFileNamePath(fromInstantFileName) + " does not exist!");
         // Use Write Once to create Target File
         if (allowRedundantTransitions) {
           FileIOUtils.createFileInPath(storage, getInstantFileNamePath(toInstantFileName), getInstantWriter(metadata));
@@ -624,7 +624,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
 
   public <T> void transitionRequestedToInflight(HoodieInstant requested, Option<T> metadata, boolean allowRedundantTransitions) {
     HoodieInstant inflight = instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, requested.getAction(), requested.requestedTime());
-    ValidationUtils.checkArgument(requested.isRequested(), "Instant " + requested + " in wrong state");
+    ValidationUtils.checkArgument(requested.isRequested(), () -> "Instant " + requested + " in wrong state");
     transitionPendingState(requested, inflight, metadata, allowRedundantTransitions);
   }
 
@@ -685,9 +685,9 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
   @Override
   public HoodieInstant transitionIndexRequestedToInflight(HoodieInstant requestedInstant) {
     ValidationUtils.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.INDEXING_ACTION),
-        String.format("%s is not equal to %s action", requestedInstant.getAction(), INDEXING_ACTION));
+        () -> String.format("%s is not equal to %s action", requestedInstant.getAction(), INDEXING_ACTION));
     ValidationUtils.checkArgument(requestedInstant.isRequested(),
-        String.format("Instant %s not in requested state", requestedInstant.requestedTime()));
+        () -> String.format("Instant %s not in requested state", requestedInstant.requestedTime()));
     HoodieInstant inflightInstant = instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, INDEXING_ACTION, requestedInstant.requestedTime());
     transitionPendingState(requestedInstant, inflightInstant, Option.empty());
     return inflightInstant;
@@ -696,7 +696,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
   @Override
   public void saveToPendingIndexAction(HoodieInstant instant, HoodieIndexPlan metadata) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.INDEXING_ACTION),
-        String.format("%s is not equal to %s action", instant.getAction(), INDEXING_ACTION));
+        () -> String.format("%s is not equal to %s action", instant.getAction(), INDEXING_ACTION));
     createFileInMetaPath(instantFileNameGenerator.getFileName(instant), Option.of(metadata), false);
   }
 

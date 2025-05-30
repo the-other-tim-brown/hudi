@@ -163,7 +163,7 @@ public abstract class StorageConfiguration<T> implements Serializable {
   public static <U> U castConfiguration(Object conf, Class<U> clazz) {
     ValidationUtils.checkArgument(
         clazz.isAssignableFrom(conf.getClass()),
-        "Cannot cast the underlying configuration to type " + clazz);
+        () -> "Cannot cast the underlying configuration to type " + clazz);
     return (U) conf;
   }
 }

@@ -63,7 +63,7 @@ public class ActiveAction implements Serializable, Comparable<ActiveAction> {
         completed.add(instant);
       }
     }
-    ValidationUtils.checkState(!completed.isEmpty(), "The instants to archive must be completed: " + instants);
+    ValidationUtils.checkState(!completed.isEmpty(), () -> "The instants to archive must be completed: " + instants);
     completed.sort(Comparator.comparing(HoodieInstant::getCompletionTime).reversed());
     return new ActiveAction(requested, inflight, completed);
   }

@@ -81,7 +81,7 @@ public enum CompressionCodec {
   public static CompressionCodec decodeCompressionCodec(int id) {
     CompressionCodec codec = ID_TO_COMPRESSION_CODEC_MAP.get(id);
     ValidationUtils.checkArgument(
-        codec != null, "Compression code not found for ID: " + id);
+        codec != null, () -> "Compression code not found for ID: " + id);
     return codec;
   }
 

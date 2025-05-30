@@ -120,7 +120,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
     rocksDB.writeBatch(batch ->
         operations.forEach(opInstantPair -> {
           ValidationUtils.checkArgument(!isPendingCompactionScheduledForFileId(opInstantPair.getValue().getFileGroupId()),
-              "Duplicate FileGroupId found in pending compaction operations. FgId :"
+              () -> "Duplicate FileGroupId found in pending compaction operations. FgId :"
                   + opInstantPair.getValue().getFileGroupId());
           rocksDB.putInBatch(batch, schemaHelper.getColFamilyForPendingCompaction(),
               schemaHelper.getKeyForPendingCompactionLookup(opInstantPair.getValue().getFileGroupId()), opInstantPair);
@@ -134,7 +134,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
         operations.forEach(opInstantPair -> {
           ValidationUtils.checkArgument(
               getPendingCompactionOperationWithInstant(opInstantPair.getValue().getFileGroupId()) != null,
-              "Trying to remove a FileGroupId which is not found in pending compaction operations. FgId :"
+              () -> "Trying to remove a FileGroupId which is not found in pending compaction operations. FgId :"
                   + opInstantPair.getValue().getFileGroupId());
           rocksDB.deleteInBatch(batch, schemaHelper.getColFamilyForPendingCompaction(),
               schemaHelper.getKeyForPendingCompactionLookup(opInstantPair.getValue().getFileGroupId()));
@@ -163,7 +163,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
     rocksDB.writeBatch(batch ->
         operations.forEach(opInstantPair -> {
           ValidationUtils.checkArgument(!isPendingLogCompactionScheduledForFileId(opInstantPair.getValue().getFileGroupId()),
-              "Duplicate FileGroupId found in pending log compaction operations. FgId :"
+              () -> "Duplicate FileGroupId found in pending log compaction operations. FgId :"
                   + opInstantPair.getValue().getFileGroupId());
           rocksDB.putInBatch(batch, schemaHelper.getColFamilyForPendingLogCompaction(),
               schemaHelper.getKeyForPendingLogCompactionLookup(opInstantPair.getValue().getFileGroupId()), opInstantPair);
@@ -177,7 +177,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
         operations.forEach(opInstantPair -> {
           ValidationUtils.checkArgument(
               getPendingLogCompactionOperationWithInstant(opInstantPair.getValue().getFileGroupId()) != null,
-              "Trying to remove a FileGroupId which is not found in pending Log compaction operations. FgId :"
+              () -> "Trying to remove a FileGroupId which is not found in pending Log compaction operations. FgId :"
                   + opInstantPair.getValue().getFileGroupId());
           rocksDB.deleteInBatch(batch, schemaHelper.getColFamilyForPendingLogCompaction(),
               schemaHelper.getKeyForPendingLogCompactionLookup(opInstantPair.getValue().getFileGroupId()));
@@ -221,7 +221,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
     rocksDB.writeBatch(batch ->
         fileGroups.forEach(fgIdToClusterInstant -> {
           ValidationUtils.checkArgument(!isPendingClusteringScheduledForFileId(fgIdToClusterInstant.getLeft()),
-              "Duplicate FileGroupId found in pending clustering operations. FgId :"
+              () -> "Duplicate FileGroupId found in pending clustering operations. FgId :"
                   + fgIdToClusterInstant.getLeft());
 
           rocksDB.putInBatch(batch, schemaHelper.getColFamilyForFileGroupsInPendingClustering(),
@@ -236,7 +236,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
         fileGroups.forEach(fgToPendingClusteringInstant -> {
           ValidationUtils.checkArgument(
               !isPendingClusteringScheduledForFileId(fgToPendingClusteringInstant.getLeft()),
-              "Trying to remove a FileGroupId which is not found in pending clustering operations. FgId :"
+              () -> "Trying to remove a FileGroupId which is not found in pending clustering operations. FgId :"
                   + fgToPendingClusteringInstant.getLeft());
           rocksDB.deleteInBatch(batch, schemaHelper.getColFamilyForFileGroupsInPendingClustering(),
               schemaHelper.getKeyForFileGroupsInPendingClustering(fgToPendingClusteringInstant.getLeft()));
@@ -415,7 +415,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
     rocksDB.writeBatch(batch -> {
       bootstrapBaseFileStream.forEach(externalBaseFile -> {
         ValidationUtils.checkArgument(!isBootstrapBaseFilePresentForFileId(externalBaseFile.getFileGroupId()),
-            "Duplicate FileGroupId found in external data file. FgId :" + externalBaseFile.getFileGroupId());
+            () -> "Duplicate FileGroupId found in external data file. FgId :" + externalBaseFile.getFileGroupId());
         rocksDB.putInBatch(batch, schemaHelper.getColFamilyForBootstrapBaseFile(),
             schemaHelper.getKeyForBootstrapBaseFile(externalBaseFile.getFileGroupId()), externalBaseFile);
       });
@@ -428,7 +428,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
       bootstrapBaseFileStream.forEach(externalBaseFile -> {
         ValidationUtils.checkArgument(
             getBootstrapBaseFile(externalBaseFile.getFileGroupId()) != null,
-            "Trying to remove a FileGroupId which is not found in external data file mapping. FgId :"
+            () -> "Trying to remove a FileGroupId which is not found in external data file mapping. FgId :"
                 + externalBaseFile.getFileGroupId());
         rocksDB.deleteInBatch(batch, schemaHelper.getColFamilyForBootstrapBaseFile(),
             schemaHelper.getKeyForBootstrapBaseFile(externalBaseFile.getFileGroupId()));

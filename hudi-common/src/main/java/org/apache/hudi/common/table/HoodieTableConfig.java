@@ -785,14 +785,14 @@ public class HoodieTableConfig extends HoodieConfig {
       RecordMergeMode modeBasedOnPayload = inferRecordMergeModeFromPayloadClass(payloadClassName);
       RecordMergeMode modeBasedOnStrategyId = inferRecordMergeModeFromMergeStrategyId(recordMergeStrategyId);
       checkArgument(modeBasedOnPayload != null || modeBasedOnStrategyId != null,
-          String.format("Cannot infer record merge mode from payload class (%s) or record merge "
+          () -> String.format("Cannot infer record merge mode from payload class (%s) or record merge "
               + "strategy ID (%s).", payloadClassName, recordMergeStrategyId));
       // TODO(HUDI-8925): once payload class name is not required, remove the check on
       //  modeBasedOnStrategyId
       if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)
           && modeBasedOnStrategyId != CUSTOM && modeBasedOnPayload != null && modeBasedOnStrategyId != null) {
         checkArgument(modeBasedOnPayload.equals(modeBasedOnStrategyId),
-            String.format("Configured payload class (%s) and record merge strategy ID (%s) conflict "
+            () -> String.format("Configured payload class (%s) and record merge strategy ID (%s) conflict "
                     + "with each other. Please only set one of them in the write config.",
                 payloadClassName, recordMergeStrategyId));
       }
@@ -804,7 +804,7 @@ public class HoodieTableConfig extends HoodieConfig {
     }
     if (recordMergeMode != null) {
       checkArgument(inferredRecordMergeMode == recordMergeMode,
-          String.format("Configured record merge mode (%s) is inconsistent with payload class (%s) "
+          () -> String.format("Configured record merge mode (%s) is inconsistent with payload class (%s) "
                   + "or record merge strategy ID (%s) configured. Please revisit the configs.",
               recordMergeMode, payloadClassName, recordMergeStrategyId));
     }
@@ -1081,7 +1081,7 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   public void setMetadataPartitionState(HoodieTableMetaClient metaClient, String partitionPath, boolean enabled) {
     ValidationUtils.checkArgument(!partitionPath.contains(CONFIG_VALUES_DELIMITER),
-        "Metadata Table partition path cannot contain a comma: " + partitionPath);
+        () -> "Metadata Table partition path cannot contain a comma: " + partitionPath);
     Set<String> partitions = getMetadataPartitions();
     Set<String> partitionsInflight = getMetadataPartitionsInflight();
     if (enabled) {
@@ -1111,7 +1111,7 @@ public class HoodieTableConfig extends HoodieConfig {
     Set<String> partitionsInflight = getMetadataPartitionsInflight();
     partitionPaths.forEach(partitionPath -> {
       ValidationUtils.checkArgument(!partitionPath.contains(CONFIG_VALUES_DELIMITER),
-          "Metadata Table partition path cannot contain a comma: " + partitionPath);
+          () -> "Metadata Table partition path cannot contain a comma: " + partitionPath);
       partitionsInflight.add(partitionPath);
     });
 

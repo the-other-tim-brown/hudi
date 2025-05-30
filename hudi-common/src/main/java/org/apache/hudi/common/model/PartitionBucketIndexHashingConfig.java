@@ -245,9 +245,9 @@ public class PartitionBucketIndexHashingConfig implements Serializable {
 
   public static PartitionBucketIndexHashingConfig loadingLatestHashingConfig(HoodieTableMetaClient metaClient) {
     Option<StoragePath> hashingConfigPathToLoad = getHashingConfigToLoad(metaClient, Option.empty());
-    ValidationUtils.checkArgument(hashingConfigPathToLoad.isPresent(), "Can not load latest hashing config " + hashingConfigPathToLoad);
+    ValidationUtils.checkArgument(hashingConfigPathToLoad.isPresent(), () -> "Can not load latest hashing config " + hashingConfigPathToLoad);
     Option<PartitionBucketIndexHashingConfig> latestHashingConfig = loadHashingConfig(metaClient.getStorage(), hashingConfigPathToLoad.get());
-    ValidationUtils.checkArgument(latestHashingConfig.isPresent(), "Can not load latest hashing config " + hashingConfigPathToLoad);
+    ValidationUtils.checkArgument(latestHashingConfig.isPresent(), () -> "Can not load latest hashing config " + hashingConfigPathToLoad);
 
     return latestHashingConfig.get();
   }
@@ -256,7 +256,7 @@ public class PartitionBucketIndexHashingConfig implements Serializable {
     Option<StoragePath> hashingConfigPathToLoad = getHashingConfigToLoad(metaClient, Option.of(instant));
     if (hashingConfigPathToLoad.isPresent()) {
       Option<PartitionBucketIndexHashingConfig> latestHashingConfig = loadHashingConfig(metaClient.getStorage(), hashingConfigPathToLoad.get());
-      ValidationUtils.checkArgument(latestHashingConfig.isPresent(), "Can not load hashing config " + hashingConfigPathToLoad + " based on " + instant);
+      ValidationUtils.checkArgument(latestHashingConfig.isPresent(), () -> "Can not load hashing config " + hashingConfigPathToLoad + " based on " + instant);
       return latestHashingConfig;
     } else {
       return Option.empty();
@@ -355,7 +355,7 @@ public class PartitionBucketIndexHashingConfig implements Serializable {
       HoodieStorage storage = metaClient.getStorage();
       if (storage.exists(path)) {
         boolean res = storage.deleteFile(path);
-        ValidationUtils.checkArgument(res, "Failed to delete hashing_config " + path);
+        ValidationUtils.checkArgument(res, () -> "Failed to delete hashing_config " + path);
         LOG.info("Deleted hashing config " + path);
         return true;
       }

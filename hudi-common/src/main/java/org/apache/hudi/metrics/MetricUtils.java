@@ -40,7 +40,7 @@ public final class MetricUtils {
 
   private static Pair<String, String> splitToPair(String label) {
     String[] keyValues = label.split(LABELS_KEY_AND_VALUE_SEPARATOR, 2);
-    ValidationUtils.checkArgument(StringUtils.nonEmpty(keyValues[0]), String.format("Key is empty for label %s", label));
+    ValidationUtils.checkArgument(StringUtils.nonEmpty(keyValues[0]), () -> String.format("Key is empty for label %s", label));
     return  Pair.of(keyValues[0], keyValues.length == 2 ? keyValues[1] : "");
   }
 

@@ -111,10 +111,9 @@
     <glassfish.version>2.17</glassfish.version>
     <glassfish.el.version>3.0.1-b12</glassfish.el.version>
     <parquet.version>1.10.1</parquet.version>
-    <junit.jupiter.version>5.8.2</junit.jupiter.version>
-    <junit.vintage.version>5.8.2</junit.vintage.version>
-    <junit.platform.version>1.8.2</junit.platform.version>
-    <mockito.jupiter.version>3.12.4</mockito.jupiter.version>
+    <junit.jupiter.version>5.12.2</junit.jupiter.version>
+    <junit.platform.version>1.12.2</junit.platform.version>
+    <mockito.jupiter.version>4.11.0</mockito.jupiter.version>
     <log4j2.version>2.17.2</log4j2.version>
     <slf4j.version>1.7.36</slf4j.version>
     <joda.version>2.9.9</joda.version>
@@ -202,7 +201,7 @@
     <spark.bundle.hive.shade.prefix/>
     <utilities.bundle.hive.scope>provided</utilities.bundle.hive.scope>
     <utilities.bundle.hive.shade.prefix/>
-    <argLine>-Xmx2g -Xms128m</argLine>
+    <argLine>-Xmx2g -Xms128m -agentpath:/Users/timbrown/code/async-profiler-2.9-macos/build/libasyncProfiler.so=start,event=cpu,file=profile.html</argLine>
     <jacoco.version>0.8.12</jacoco.version>
     <presto.bundle.bootstrap.scope>compile</presto.bundle.bootstrap.scope>
     <presto.bundle.bootstrap.shade.prefix>org.apache.hudi.</presto.bundle.bootstrap.shade.prefix>
@@ -1711,7 +1710,7 @@
       <dependency>
         <groupId>org.junit.vintage</groupId>
         <artifactId>junit-vintage-engine</artifactId>
-        <version>${junit.vintage.version}</version>
+        <version>${junit.jupiter.version}</version>
         <scope>test</scope>
       </dependency>
       <dependency>
@@ -1999,6 +1998,7 @@
             <artifactId>maven-surefire-plugin</artifactId>
             <version>${maven-surefire-plugin.version}</version>
             <configuration combine.self="append">
+              <argLine>@{argLine}</argLine>
               <skip>${skipUTs}</skip>
               <forkedProcessExitTimeoutInSeconds>120</forkedProcessExitTimeoutInSeconds>
               <excludedGroups>functional,functional-b</excludedGroups>
@@ -2059,6 +2059,7 @@
               </dependency>
             </dependencies>
             <configuration combine.self="append">
+              <argLine>@{argLine}</argLine>
               <skip>${skipFTs}</skip>
               <forkCount>1</forkCount>
               <reuseForks>true</reuseForks>

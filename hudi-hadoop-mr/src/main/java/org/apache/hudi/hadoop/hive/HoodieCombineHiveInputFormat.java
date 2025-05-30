@@ -1012,7 +1012,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
       isRealTime = Boolean.valueOf(job.get("hudi.hive.realtime", "false"));
       if (isRealTime) {
         List<RecordReader> recordReaders = new LinkedList<>();
-        ValidationUtils.checkArgument(split instanceof HoodieCombineRealtimeFileSplit, "Only "
+        ValidationUtils.checkArgument(split instanceof HoodieCombineRealtimeFileSplit, () -> "Only "
             + HoodieCombineRealtimeFileSplit.class.getName() + " allowed, found " + split.getClass().getName());
         for (InputSplit inputSplit : ((HoodieCombineRealtimeFileSplit) split).getRealtimeFileSplits()) {
           if (split.getPaths().length == 0) {

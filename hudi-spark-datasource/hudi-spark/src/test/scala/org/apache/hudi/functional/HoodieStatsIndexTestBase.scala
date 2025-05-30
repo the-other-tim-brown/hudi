@@ -98,7 +98,6 @@ class HoodieStatsIndexTestBase extends HoodieSparkClientTestBase {
     val lastInstant = getLastInstant()
     if (enforce || metaClient.getActiveTimeline.lastInstant().isEmpty
       || metaClient.getActiveTimeline.lastInstant().get().requestedTime.compareTo(lastInstant) < 0) {
-      println("Reloaded timeline")
       metaClient.reloadActiveTimeline()
       metaClient
     }

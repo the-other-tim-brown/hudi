@@ -125,7 +125,7 @@ public class TimelineMetadataUtils {
       throws IOException {
     DatumReader<T> reader = new SpecificDatumReader<>(clazz);
     FileReader<T> fileReader = DataFileReader.openReader(new SeekableByteArrayInput(bytes), reader);
-    ValidationUtils.checkArgument(fileReader.hasNext(), "Could not deserialize metadata of type " + clazz);
+    ValidationUtils.checkArgument(fileReader.hasNext(), () -> "Could not deserialize metadata of type " + clazz);
     return fileReader.next();
   }
 
@@ -133,7 +133,7 @@ public class TimelineMetadataUtils {
       throws IOException {
     DatumReader<T> reader = new SpecificDatumReader<>(clazz);
     try (DataFileStream<T> fileReader = new DataFileStream<>(inputStream, reader)) {
-      ValidationUtils.checkArgument(fileReader.hasNext(), "Could not deserialize metadata of type " + clazz);
+      ValidationUtils.checkArgument(fileReader.hasNext(), () -> "Could not deserialize metadata of type " + clazz);
       return fileReader.next();
     }
   }

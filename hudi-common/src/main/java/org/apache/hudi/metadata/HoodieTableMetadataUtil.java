@@ -427,7 +427,7 @@ public class HoodieTableMetadataUtil {
     }
     if (enabledPartitionTypes.contains(MetadataPartitionType.PARTITION_STATS.getPartitionPath())) {
       checkState(MetadataPartitionType.COLUMN_STATS.isMetadataPartitionAvailable(dataMetaClient),
-          "Column stats partition must be enabled to generate partition stats. Please enable: " + HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key());
+          () -> "Column stats partition must be enabled to generate partition stats. Please enable: " + HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key());
       // Generate Hoodie Pair data of partition name and list of column range metadata for all the files in that partition
       boolean isDeletePartition = commitMetadata.getOperationType().equals(WriteOperationType.DELETE_PARTITION);
       final HoodieData<HoodieRecord> partitionStatsRDD = convertMetadataToPartitionStatRecords(commitMetadata, context,
@@ -856,7 +856,7 @@ public class HoodieTableMetadataUtil {
                 .collect(Collectors.toList());
             // Ensure that only one of base file or log file write stats exists
             checkState(baseFileWriteStats.isEmpty() || logFileWriteStats.isEmpty(),
-                "A single fileId cannot have both base file and log file write stats in the same commit. FileId: " + fileId);
+                () -> "A single fileId cannot have both base file and log file write stats in the same commit. FileId: " + fileId);
             // Process base file write stats
             if (!baseFileWriteStats.isEmpty()) {
               return baseFileWriteStats.stream()

@@ -222,7 +222,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   protected void addPendingCompactionOperations(Stream<Pair<String, CompactionOperation>> operations) {
     operations.forEach(opInstantPair -> {
       ValidationUtils.checkArgument(!fgIdToPendingCompaction.containsKey(opInstantPair.getValue().getFileGroupId()),
-          "Duplicate FileGroupId found in pending compaction operations. FgId :"
+          () -> "Duplicate FileGroupId found in pending compaction operations. FgId :"
               + opInstantPair.getValue().getFileGroupId());
       fgIdToPendingCompaction.put(opInstantPair.getValue().getFileGroupId(),
           Pair.of(opInstantPair.getKey(), opInstantPair.getValue()));
@@ -233,7 +233,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   protected void removePendingCompactionOperations(Stream<Pair<String, CompactionOperation>> operations) {
     operations.forEach(opInstantPair -> {
       ValidationUtils.checkArgument(fgIdToPendingCompaction.containsKey(opInstantPair.getValue().getFileGroupId()),
-          "Trying to remove a FileGroupId which is not found in pending compaction operations. FgId :"
+          () -> "Trying to remove a FileGroupId which is not found in pending compaction operations. FgId :"
               + opInstantPair.getValue().getFileGroupId());
       fgIdToPendingCompaction.remove(opInstantPair.getValue().getFileGroupId());
     });
@@ -255,7 +255,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   protected void addPendingLogCompactionOperations(Stream<Pair<String, CompactionOperation>> operations) {
     operations.forEach(opInstantPair -> {
       ValidationUtils.checkArgument(!fgIdToPendingLogCompaction.containsKey(opInstantPair.getValue().getFileGroupId()),
-          "Duplicate FileGroupId found in pending log compaction operations. FgId :"
+          () -> "Duplicate FileGroupId found in pending log compaction operations. FgId :"
               + opInstantPair.getValue().getFileGroupId());
       fgIdToPendingLogCompaction.put(opInstantPair.getValue().getFileGroupId(),
           Pair.of(opInstantPair.getKey(), opInstantPair.getValue()));
@@ -266,7 +266,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   protected void removePendingLogCompactionOperations(Stream<Pair<String, CompactionOperation>> operations) {
     operations.forEach(opInstantPair -> {
       ValidationUtils.checkArgument(fgIdToPendingLogCompaction.containsKey(opInstantPair.getValue().getFileGroupId()),
-          "Trying to remove a FileGroupId which is not found in pending log compaction operations. FgId :"
+          () -> "Trying to remove a FileGroupId which is not found in pending log compaction operations. FgId :"
               + opInstantPair.getValue().getFileGroupId());
       fgIdToPendingLogCompaction.remove(opInstantPair.getValue().getFileGroupId());
     });
@@ -296,7 +296,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   void addFileGroupsInPendingClustering(Stream<Pair<HoodieFileGroupId, HoodieInstant>> fileGroups) {
     fileGroups.forEach(fileGroupInstantPair -> {
       ValidationUtils.checkArgument(fgIdToPendingClustering.containsKey(fileGroupInstantPair.getLeft()),
-          "Trying to add a FileGroupId which is already in pending clustering operation. FgId :"
+          () -> "Trying to add a FileGroupId which is already in pending clustering operation. FgId :"
               + fileGroupInstantPair.getLeft() + ", new instant: " + fileGroupInstantPair.getRight() + ", existing instant "
               + fgIdToPendingClustering.get(fileGroupInstantPair.getLeft()));
 
@@ -308,7 +308,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   void removeFileGroupsInPendingClustering(Stream<Pair<HoodieFileGroupId, HoodieInstant>> fileGroups) {
     fileGroups.forEach(fileGroupInstantPair -> {
       ValidationUtils.checkArgument(fgIdToPendingClustering.containsKey(fileGroupInstantPair.getLeft()),
-          "Trying to remove a FileGroupId which is not found in pending clustering operation. FgId :"
+          () -> "Trying to remove a FileGroupId which is not found in pending clustering operation. FgId :"
               + fileGroupInstantPair.getLeft() + ", new instant: " + fileGroupInstantPair.getRight());
 
       fgIdToPendingClustering.remove(fileGroupInstantPair.getLeft());
@@ -360,7 +360,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   void addBootstrapBaseFileMapping(Stream<BootstrapBaseFileMapping> bootstrapBaseFileStream) {
     bootstrapBaseFileStream.forEach(bootstrapBaseFile -> {
       ValidationUtils.checkArgument(!fgIdToBootstrapBaseFile.containsKey(bootstrapBaseFile.getFileGroupId()),
-          "Duplicate FileGroupId found in bootstrap base file mapping. FgId :"
+          () -> "Duplicate FileGroupId found in bootstrap base file mapping. FgId :"
               + bootstrapBaseFile.getFileGroupId());
       fgIdToBootstrapBaseFile.put(bootstrapBaseFile.getFileGroupId(), bootstrapBaseFile);
     });
@@ -370,7 +370,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   void removeBootstrapBaseFileMapping(Stream<BootstrapBaseFileMapping> bootstrapBaseFileStream) {
     bootstrapBaseFileStream.forEach(bootstrapBaseFile -> {
       ValidationUtils.checkArgument(fgIdToBootstrapBaseFile.containsKey(bootstrapBaseFile.getFileGroupId()),
-          "Trying to remove a FileGroupId which is not found in bootstrap base file mapping. FgId :"
+          () -> "Trying to remove a FileGroupId which is not found in bootstrap base file mapping. FgId :"
               + bootstrapBaseFile.getFileGroupId());
       fgIdToBootstrapBaseFile.remove(bootstrapBaseFile.getFileGroupId());
     });
