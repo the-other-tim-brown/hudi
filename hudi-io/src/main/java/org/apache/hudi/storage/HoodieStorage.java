@@ -35,6 +35,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
+import java.nio.file.FileAlreadyExistsException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -417,11 +418,11 @@ public abstract class HoodieStorage implements Closeable {
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public boolean createNewFile(StoragePath path) throws IOException {
-    if (exists(path)) {
-      return false;
-    } else {
+    try {
       create(path, false).close();
       return true;
+    } catch (FileAlreadyExistsException ex) {
+      return false;
     }
   }
 

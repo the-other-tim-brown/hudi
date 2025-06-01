@@ -33,8 +33,6 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.module.afterburner.AfterburnerModule;
 import org.apache.hadoop.util.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,7 +63,6 @@ import static org.apache.hudi.timeline.service.RequestHandler.jsonifyResult;
  */
 public class MarkerDirState implements Serializable {
   private static final Logger LOG = LoggerFactory.getLogger(MarkerDirState.class);
-  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper().registerModule(new AfterburnerModule());
   // Marker directory
   private final String markerDirPath;
   private final HoodieStorage storage;
@@ -259,7 +256,7 @@ public class MarkerDirState implements Serializable {
     for (MarkerCreationFuture future : pendingMarkerCreationFutures) {
       try {
         future.complete(jsonifyResult(
-            future.getContext(), future.isSuccessful(), metricsRegistry, OBJECT_MAPPER, LOG));
+            future.getContext(), future.isSuccessful(), metricsRegistry, LOG));
       } catch (JsonProcessingException e) {
         throw new HoodieException("Failed to JSON encode the value", e);
       }

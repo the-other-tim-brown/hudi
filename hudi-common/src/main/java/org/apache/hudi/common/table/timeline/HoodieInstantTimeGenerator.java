@@ -23,6 +23,7 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieException;
 
 import java.text.ParseException;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -75,13 +76,13 @@ public class HoodieInstantTimeGenerator {
     return LAST_INSTANT_TIME.updateAndGet((oldVal) -> {
       String newCommitTime;
       do {
-        Date d = new Date(timeGenerator.generateTime(!shouldLock) + milliseconds);
+        Instant instant = Instant.ofEpochMilli(timeGenerator.generateTime(!shouldLock) + milliseconds);
 
         if (commitTimeZone.equals(HoodieTimelineTimeZone.UTC)) {
-          newCommitTime = d.toInstant().atZone(HoodieTimelineTimeZone.UTC.getZoneId())
+          newCommitTime = instant.atZone(HoodieTimelineTimeZone.UTC.getZoneId())
               .toLocalDateTime().format(MILLIS_INSTANT_TIME_FORMATTER);
         } else {
-          newCommitTime = MILLIS_INSTANT_TIME_FORMATTER.format(convertDateToTemporalAccessor(d));
+          newCommitTime = MILLIS_INSTANT_TIME_FORMATTER.format(convertDateToTemporalAccessor(instant));
         }
       } while (compareTimestamps(newCommitTime, LESSER_THAN_OR_EQUALS, oldVal));
       return newCommitTime;
@@ -148,7 +149,7 @@ public class HoodieInstantTimeGenerator {
   }
 
   public static String formatDate(Date timestamp) {
-    return getInstantFromTemporalAccessor(convertDateToTemporalAccessor(timestamp));
+    return getInstantFromTemporalAccessor(convertDateToTemporalAccessor(timestamp.toInstant()));
   }
 
   public static String getInstantFromTemporalAccessor(TemporalAccessor temporalAccessor) {
@@ -176,8 +177,8 @@ public class HoodieInstantTimeGenerator {
     }
   }
 
-  private static TemporalAccessor convertDateToTemporalAccessor(Date d) {
-    return d.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
+  private static TemporalAccessor convertDateToTemporalAccessor(Instant instant) {
+    return instant.atZone(ZoneId.systemDefault()).toLocalDateTime();
   }
 
   public static void setCommitTimeZone(HoodieTimelineTimeZone commitTimeZone) {

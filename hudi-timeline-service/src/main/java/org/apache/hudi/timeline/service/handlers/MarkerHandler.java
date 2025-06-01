@@ -36,7 +36,6 @@ import org.apache.hudi.timeline.service.handlers.marker.MarkerCreationFuture;
 import org.apache.hudi.timeline.service.handlers.marker.MarkerDirState;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.javalin.http.Context;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -274,7 +273,7 @@ public class MarkerHandler extends Handler {
     MarkerCreationFuture future = new MarkerCreationFuture(context, markerDir, markerName);
     try {
       future.complete(jsonifyResult(
-          future.getContext(), future.isSuccessful(), metricsRegistry, new ObjectMapper(), LOG));
+          future.getContext(), future.isSuccessful(), metricsRegistry, LOG));
     } catch (JsonProcessingException e) {
       throw new HoodieException("Failed to JSON encode the value", e);
     }
@@ -287,7 +286,7 @@ public class MarkerHandler extends Handler {
    * @param markerDir marker directory path
    * @return {@code true} if successful; {@code false} otherwise.
    */
-  public Boolean deleteMarkers(String markerDir) {
+  public boolean deleteMarkers(String markerDir) {
     boolean result = getMarkerDirState(markerDir).deleteAllMarkers();
     markerDirStateMap.remove(markerDir);
     return result;
