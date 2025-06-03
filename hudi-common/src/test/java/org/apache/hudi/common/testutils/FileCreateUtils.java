@@ -51,6 +51,7 @@ import org.apache.hudi.storage.StoragePath;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.io.UncheckedIOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.DirectoryStream;
@@ -65,6 +66,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Utils for creating dummy Hudi files in testing.
@@ -541,14 +543,28 @@ public class FileCreateUtils extends FileCreateUtilsBase {
         .endsWith(String.format("%s.%s", HoodieTableMetaClient.MARKER_EXTN, ioType))).count();
   }
 
-  public static List<Path> getPartitionPaths(Path basePath) throws IOException {
+  public static List<Path> getPartitionPaths(Path basePath) {
     if (Files.notExists(basePath)) {
       return Collections.emptyList();
     }
-    return Files.list(basePath).filter(entry -> !entry.getFileName().toString().equals(HoodieTableMetaClient.METAFOLDER_NAME)
-            && !isBaseOrLogFilename(entry.getFileName().toString())
-            && !entry.getFileName().toString().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX))
-        .collect(Collectors.toList());
+    try {
+      List<Path> paths = Files.list(basePath)
+          .flatMap(entry -> {
+            if (Files.isDirectory(entry) && !entry.getFileName().toString().equals(HoodieTableMetaClient.METAFOLDER_NAME)) {
+              return getPartitionPaths(entry).stream();
+            } else {
+              if (entry.getFileName().toString().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX)) {
+                return Stream.of(entry.getParent());
+              } else {
+                return Stream.empty();
+              }
+            }
+          })
+          .collect(Collectors.toList());
+      return paths;
+    } catch (IOException ex) {
+      throw new UncheckedIOException("Failed to list partition paths in base path: " + basePath, ex);
+    }
   }
 
   public static boolean isBaseOrLogFilename(String filename) {

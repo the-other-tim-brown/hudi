@@ -206,6 +206,11 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.when;
 
 @Tag("functional")
 public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
@@ -1078,6 +1083,203 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // add few more write and validate
       doWriteOperation(testTable, metaClient.createNewInstantTime(), INSERT);
       doWriteOperation(testTable, metaClient.createNewInstantTime(), UPSERT);
+      validateMetadata(testTable);
+    }
+  }
+
+  @ParameterizedTest(name = "tableVersion={0}")
+  @ValueSource(ints = {8, 6})
+  void testOutOfOrderDataTableCommits(int tableVersion) throws Exception {
+    HoodieTableType tableType = COPY_ON_WRITE;
+    initPath();
+    writeConfig = getWriteConfigBuilder(false, true, false)
+        .withEmbeddedTimelineServerEnabled(false)
+        .withWriteTableVersion(tableVersion)
+        .withAutoUpgradeVersion(false)
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withLockConfig(HoodieLockConfig.newBuilder()
+            .withLockProvider(InProcessLockProvider.class)
+            .build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .compactionSmallFileSize(1L)
+            .build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withEnableRecordIndex(true)
+            .withMaxNumDeltaCommitsBeforeCompaction(6)
+            .build())
+        .build();
+    init(tableType, writeConfig);
+
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+
+    try (SparkRDDWriteClient client1 = new SparkRDDWriteClient(engineContext, writeConfig);
+         SparkRDDWriteClient client2 = new SparkRDDWriteClient(engineContext, writeConfig)) {
+      // Write 1 (Bulk insert)
+      Set<String> writtenRecordKeys = new HashSet<>();
+      String newCommitTime1 = client1.startCommit();
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime1, 100);
+      records.stream().forEach(r -> writtenRecordKeys.add(r.getRecordKey()));
+      JavaRDD<WriteStatus> writeStatuses = client1.insert(jsc.parallelize(records, 1), newCommitTime1);
+      client1.commit(newCommitTime1, writeStatuses);
+
+      // start a second commit but do not commit it yet (generate inserts with new data generator to avoid write conflicts)
+      String newCommitTime2 = client1.startCommit();
+      List<HoodieRecord> unCommittedRecords = new HoodieTestDataGenerator(0L).generateInserts(newCommitTime2, 50).stream()
+          .filter(hoodieRecord -> !writtenRecordKeys.contains(hoodieRecord.getRecordKey())).collect(Collectors.toList());
+      JavaRDD<WriteStatus> unCommittedWriteStatuses = client1.insert(jsc.parallelize(unCommittedRecords, 1), newCommitTime2);
+
+      // start and finish a third commit
+      String newCommitTime3 = client2.startCommit();
+      records = dataGen.generateUniqueUpdates(newCommitTime3, 20);
+      records.stream().forEach(r -> writtenRecordKeys.add(r.getRecordKey()));
+      writeStatuses = client2.upsert(jsc.parallelize(records, 1), newCommitTime3);
+      client2.commit(newCommitTime3, writeStatuses);
+
+      // start and finish a fourth commit to force compaction on the metadata table
+      String newCommitTime4 = client2.startCommit();
+      records = dataGen.generateUniqueUpdates(newCommitTime4, 20);
+      records.stream().forEach(r -> writtenRecordKeys.add(r.getRecordKey()));
+      writeStatuses = client2.upsert(jsc.parallelize(records, 1), newCommitTime4);
+      client2.commit(newCommitTime4, writeStatuses);
+
+      String mdtBasePath = getMetadataTableBasePath(basePath);
+      HoodieTableMetaClient metadataMetaClient = createMetaClient(mdtBasePath);
+      if (tableVersion == 8) {
+        // validate that the metadata table compaction ran
+        assertEquals(COMMIT_ACTION, metadataMetaClient.getActiveTimeline().lastInstant().get().getAction());
+      } else {
+        // table version 6 blocks the metadata table compaction when there are pending instants in the data table
+        assertFalse(metadataMetaClient.getActiveTimeline().getInstantsAsStream().anyMatch(instant -> HoodieTimeline.COMMIT_ACTION.equals(instant.getAction())));
+      }
+      // validate that the metadata table contains only the committed data
+      HoodieTableMetadata metadataReader = HoodieTableMetadata.create(
+          context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
+      List<String> distinctCommittedRecordKeys = new ArrayList<>(writtenRecordKeys);
+      List<String> unCommittedRecordKeys = unCommittedRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList());
+      assertEquals(0, metadataReader.readRecordIndex(unCommittedRecordKeys).size(), "RI should not return entries that are not committed.");
+      assertEquals(distinctCommittedRecordKeys.size(), metadataReader.readRecordIndex(distinctCommittedRecordKeys).size(), "RI should return all committed entries.");
+
+      client1.commit(newCommitTime2, unCommittedWriteStatuses);
+      metadataReader = HoodieTableMetadata.create(
+          context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
+      // check that the record index now contains the previously uncommitted records
+      assertEquals(unCommittedRecordKeys.size(), metadataReader.readRecordIndex(unCommittedRecordKeys).size(), "RI should now contain all rows.");
+      // validate the full metadata table state
+      testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context));
+      validateMetadata(testTable);
+    }
+  }
+
+  @ParameterizedTest(name = "tableVersion={0}")
+  @ValueSource(ints = {8, 6})
+  void testFailedDataTableCommitWithMetadataTableSuccessfulCommit(int tableVersion) throws Exception {
+    HoodieTableType tableType = COPY_ON_WRITE;
+    initPath();
+    writeConfig = getWriteConfigBuilder(false, true, false)
+        .withWriteTableVersion(tableVersion)
+        .withAutoUpgradeVersion(false)
+        .withEmbeddedTimelineServerEnabled(false)
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withLockConfig(HoodieLockConfig.newBuilder()
+            .withLockProvider(InProcessLockProvider.class)
+            .build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .compactionSmallFileSize(1L)
+            .build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withEnableRecordIndex(true)
+            .withMaxNumDeltaCommitsBeforeCompaction(6)
+            .build())
+        .build();
+    init(tableType, writeConfig);
+
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+
+    try (SparkRDDWriteClient client1 = new SparkRDDWriteClient(engineContext, writeConfig);
+         SparkRDDWriteClient client2 = new WriteClientWithDataTableCommitFailure(engineContext, writeConfig)) {
+      // Write 1 (Bulk insert)
+      Set<String> writtenRecordKeys = new HashSet<>();
+      String newCommitTime1 = client1.startCommit();
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime1, 100);
+      records.stream().forEach(r -> writtenRecordKeys.add(r.getRecordKey()));
+      JavaRDD<WriteStatus> writeStatuses = client1.insert(jsc.parallelize(records, 1), newCommitTime1);
+      client1.commit(newCommitTime1, writeStatuses);
+
+      // create a second commit but then delete the data table commit file in the timeline to simulate a failed commit
+      String newCommitTime2 = client2.startCommit();
+      List<HoodieRecord> failedDataTableWriteRecords = new HoodieTestDataGenerator(0L).generateInserts(newCommitTime2, 50).stream()
+          .filter(hoodieRecord -> !writtenRecordKeys.contains(hoodieRecord.getRecordKey())).collect(Collectors.toList());
+      JavaRDD<WriteStatus> failedDataTableWriteStatuses = client2.insert(jsc.parallelize(failedDataTableWriteRecords, 1), newCommitTime2);
+      // simulate a failure while updating the data table timeline
+      Assertions.assertThrows(HoodieException.class, () -> client2.commit(newCommitTime2, failedDataTableWriteStatuses));
+      // validate the state of the metadata and data table timelines match our expectations
+      String mdtBasePath = getMetadataTableBasePath(basePath);
+      HoodieTableMetaClient metadataMetaClient = createMetaClient(mdtBasePath);
+      HoodieTableMetaClient dataTableMetaClient = createMetaClient(basePath);
+      HoodieInstant dataTableInstant = dataTableMetaClient.getActiveTimeline().lastInstant().get();
+      HoodieInstant metadataTableInstant = metadataMetaClient.getActiveTimeline().lastInstant().get();
+      assertEquals(dataTableInstant.requestedTime(), metadataTableInstant.requestedTime());
+      assertEquals(HoodieInstant.State.INFLIGHT, dataTableInstant.getState());
+      assertEquals(HoodieInstant.State.COMPLETED, metadataTableInstant.getState());
+
+      // start and finish a third commit
+      String newCommitTime3 = client1.startCommit();
+      records = dataGen.generateUniqueUpdates(newCommitTime3, 20);
+      records.stream().forEach(r -> writtenRecordKeys.add(r.getRecordKey()));
+      writeStatuses = client1.upsert(jsc.parallelize(records, 1), newCommitTime3);
+      client1.commit(newCommitTime3, writeStatuses);
+
+      // validate that the metadata table compaction ran
+      Option<HoodieInstant> compactionInstant = Option.fromJavaOptional(metadataMetaClient.reloadActiveTimeline().getInstants().stream()
+          .filter(hoodieInstant -> hoodieInstant.getAction().equals(HoodieTimeline.COMMIT_ACTION)).findFirst());
+      if (tableVersion == 8) {
+        // table version 8 allows compaction to run even if there are pending instants in the data table
+        assertTrue(compactionInstant.isPresent(), "Compaction of metadata table should run.");
+      } else {
+        // table version 6 blocks the metadata table compaction when there are pending instants in the data table
+        assertFalse(compactionInstant.isPresent(), "Compaction of metadata table should not run.");
+      }
+      // validate that the data table write is still in pending state
+      assertEquals(1, dataTableMetaClient.reloadActiveTimeline().filterPendingExcludingCompaction().countInstants());
+      // validate that the metadata table contains only the committed data
+      HoodieTableMetadata metadataReader = HoodieTableMetadata.create(
+          context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
+      List<String> distinctCommittedRecordKeys = new ArrayList<>(writtenRecordKeys);
+      List<String> unCommittedRecordKeys = failedDataTableWriteRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList());
+      assertEquals(0, metadataReader.readRecordIndex(unCommittedRecordKeys).size(), "RI should not return entries that are not committed.");
+      assertEquals(distinctCommittedRecordKeys.size(), metadataReader.readRecordIndex(distinctCommittedRecordKeys).size(), "RI should return all committed entries.");
+    }
+    // trigger cleanup of failed data table commit and ensure no issue with new writes
+    writeConfig = getWriteConfigBuilder(false, true, false)
+        .withWriteTableVersion(tableVersion)
+        .withAutoUpgradeVersion(false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withEnableRecordIndex(true)
+            .build())
+        .withEmbeddedTimelineServerEnabled(false)
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withLockConfig(HoodieLockConfig.newBuilder()
+            .withLockProvider(InProcessLockProvider.class)
+            .build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(1)
+            .withMaxCommitsBeforeCleaning(1)
+            .build())
+        .build();
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+      client.clean();
+      HoodieTableMetaClient metaClient = createMetaClient(basePath);
+      assertEquals(0, metaClient.getActiveTimeline().filterPendingExcludingCompaction().countInstants());
+      // try a new write after the cleanup
+      String finalCommitTime = client.startCommit();
+      List<HoodieRecord> records = dataGen.generateUniqueUpdates(finalCommitTime, 100);
+      JavaRDD<WriteStatus> writeStatuses = client.upsert(jsc.parallelize(records, 1), finalCommitTime);
+      client.commit(finalCommitTime, writeStatuses);
+      // validate the full metadata table state
+      testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context));
       validateMetadata(testTable);
     }
   }
@@ -4040,5 +4242,20 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     Properties properties = new Properties();
     properties.setProperty("hoodie.datasource.write.row.writer.enable", String.valueOf(false));
     return properties;
+  }
+
+  private static class WriteClientWithDataTableCommitFailure<T> extends SparkRDDWriteClient<T> {
+    public WriteClientWithDataTableCommitFailure(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
+      super(context, clientConfig);
+    }
+
+    @Override
+    protected HoodieTable createTable(HoodieWriteConfig config) {
+      HoodieTable table = spy(super.createTable(config));
+      HoodieActiveTimeline activeTimeline = spy(table.getActiveTimeline());
+      when(table.getActiveTimeline()).thenReturn(activeTimeline);
+      doThrow(new HoodieException("Simulated failure during commit")).when(activeTimeline).saveAsComplete(anyBoolean(), any(), any());
+      return table;
+    }
   }
 }

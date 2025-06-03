@@ -517,7 +517,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
     // Partitions should match
     List<java.nio.file.Path> fsPartitionPaths = testTable.getAllPartitionPaths();
     List<String> fsPartitions = new ArrayList<>();
-    fsPartitionPaths.forEach(entry -> fsPartitions.add(entry.getFileName().toString()));
+    fsPartitionPaths.forEach(entry -> fsPartitions.add(FSUtils.getRelativePartitionPath(new StoragePath(basePath), new StoragePath(entry.toString()))));
     if (fsPartitions.isEmpty() && testTable.isNonPartitioned()) {
       fsPartitions.add("");
     }

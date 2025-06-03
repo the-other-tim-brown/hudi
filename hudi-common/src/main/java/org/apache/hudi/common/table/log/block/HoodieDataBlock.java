@@ -507,8 +507,8 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
               throw new IllegalStateException(String.format("Record without a key (%s)", this.next));
             });
 
-        if (fullKey && keys.contains(key)
-            || !fullKey && keys.stream().anyMatch(key::startsWith)) {
+        if ((fullKey && keys.contains(key))
+            || (!fullKey && keys.stream().anyMatch(key::startsWith))) {
           return true;
         }
       }
