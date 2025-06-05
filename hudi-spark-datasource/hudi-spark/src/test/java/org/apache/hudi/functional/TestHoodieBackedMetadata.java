@@ -1197,6 +1197,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
+    List<HoodieRecord> failedDataTableWriteRecords;
     try (SparkRDDWriteClient client1 = new SparkRDDWriteClient(engineContext, writeConfig);
          SparkRDDWriteClient client2 = new WriteClientWithDataTableCommitFailure(engineContext, writeConfig)) {
       // Write 1 (Bulk insert)
@@ -1209,7 +1210,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // create a second commit but then delete the data table commit file in the timeline to simulate a failed commit
       String newCommitTime2 = client2.startCommit();
-      List<HoodieRecord> failedDataTableWriteRecords = new HoodieTestDataGenerator(0L).generateInserts(newCommitTime2, 50).stream()
+      failedDataTableWriteRecords = new HoodieTestDataGenerator(0L).generateInserts(newCommitTime2, 50).stream()
           .filter(hoodieRecord -> !writtenRecordKeys.contains(hoodieRecord.getRecordKey())).collect(Collectors.toList());
       JavaRDD<WriteStatus> failedDataTableWriteStatuses = client2.insert(jsc.parallelize(failedDataTableWriteRecords, 1), newCommitTime2);
       // simulate a failure while updating the data table timeline
@@ -1281,6 +1282,11 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // validate the full metadata table state
       testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context));
       validateMetadata(testTable);
+      // validate again that the metadata was not updated with the failed commit
+      List<String> unCommittedRecordKeys = failedDataTableWriteRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList());
+      HoodieTableMetadata metadataReader = HoodieTableMetadata.create(
+          context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
+      assertEquals(0, metadataReader.readRecordIndex(unCommittedRecordKeys).size(), "RI should not return entries that are not committed.");
     }
   }
 
