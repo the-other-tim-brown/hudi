@@ -17,6 +17,10 @@
 
 package org.apache.spark.sql.hudi.procedure
 
+import org.apache.hudi.common.fs.FSUtils
+
+import java.nio.file.{Files, Paths}
+
 class TestMetadataProcedure extends HoodieSparkProcedureTestBase {
 
   test("Test Call create_metadata_table then create_metadata_table") {
@@ -259,6 +263,13 @@ class TestMetadataProcedure extends HoodieSparkProcedureTestBase {
       for (i <- maxResult.indices) {
         val columnName = s"c${i + 1}"
         val metadataStats = spark.sql(s"""call show_metadata_column_stats_overlap(table => '$tableName', targetColumns => '$columnName')""").collect()
+        if (metadataStats.length != 1) {
+          println(s"Column: $columnName")
+          val path = s"${tmp.getCanonicalPath}/$tableName"
+          println(s"Table Path: $path")
+          Files.list(Paths.get(path))
+            .forEach(file => println(s"File: $file"))
+        }
         assertResult(1) {
           metadataStats.length
         }
