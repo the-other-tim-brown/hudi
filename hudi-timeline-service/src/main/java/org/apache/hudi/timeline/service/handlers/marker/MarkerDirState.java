@@ -320,8 +320,6 @@ public class MarkerDirState implements Serializable {
   private void writeMarkerTypeToFile() {
     try {
       if (!MarkerUtils.doesMarkerTypeFileExist(storage, markerDirPath)) {
-        // There is no existing marker directory, create a new directory and write marker type
-        storage.createDirectory(markerDirPath);
         MarkerUtils.writeMarkerTypeToFile(MarkerType.TIMELINE_SERVER_BASED, storage, markerDirPath);
       }
     } catch (IOException e) {
