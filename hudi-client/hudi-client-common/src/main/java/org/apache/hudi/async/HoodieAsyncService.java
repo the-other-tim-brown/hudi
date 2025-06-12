@@ -51,7 +51,7 @@ public abstract class HoodieAsyncService implements Serializable {
   // Flag indicating the service is shutdown
   private volatile boolean shutdown;
   // Executor Service for running delta-sync/compaction
-  private transient ExecutorService executor;
+  protected transient ExecutorService executor;
   // Future tracking delta-sync/compaction
   private transient CompletableFuture future;
   // Run in daemon mode

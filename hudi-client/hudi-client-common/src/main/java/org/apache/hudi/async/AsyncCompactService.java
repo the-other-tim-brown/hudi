@@ -67,7 +67,7 @@ public abstract class AsyncCompactService extends HoodieAsyncTableService {
    */
   @Override
   protected Pair<CompletableFuture, ExecutorService> startService() {
-    ExecutorService executor = Executors.newFixedThreadPool(maxConcurrentCompaction,
+    this.executor = Executors.newFixedThreadPool(maxConcurrentCompaction,
         new CustomizedThreadFactory("async_compact_thread", isRunInDaemonMode()));
     return Pair.of(CompletableFuture.allOf(IntStream.range(0, maxConcurrentCompaction).mapToObj(i -> CompletableFuture.supplyAsync(() -> {
       try {

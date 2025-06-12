@@ -20,6 +20,8 @@
 package org.apache.hudi.async;
 
 import org.apache.hudi.client.BaseHoodieWriteClient;
+import org.apache.hudi.common.model.TableServiceType;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -39,10 +41,10 @@ public class AsyncCleanerService extends HoodieAsyncTableService {
   private static final Logger LOG = LoggerFactory.getLogger(AsyncCleanerService.class);
 
   private final BaseHoodieWriteClient writeClient;
-  private final transient ExecutorService executor = Executors.newSingleThreadExecutor();
 
   protected AsyncCleanerService(BaseHoodieWriteClient writeClient) {
     super(writeClient.getConfig());
+    this.executor = Executors.newSingleThreadExecutor();
     this.writeClient = writeClient;
   }
 
@@ -60,6 +62,7 @@ public class AsyncCleanerService extends HoodieAsyncTableService {
       LOG.info("The HoodieWriteClient is not configured to auto & async clean. Async clean service will not start.");
       return null;
     }
+    writeClient.scheduleTableService(Option.empty(), TableServiceType.CLEAN);
     AsyncCleanerService asyncCleanerService = new AsyncCleanerService(writeClient);
     asyncCleanerService.start(null);
     return asyncCleanerService;

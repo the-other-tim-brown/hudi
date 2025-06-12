@@ -67,7 +67,7 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
    */
   @Override
   protected Pair<CompletableFuture, ExecutorService> startService() {
-    ExecutorService executor = Executors.newFixedThreadPool(maxConcurrentClustering,
+    this.executor = Executors.newFixedThreadPool(maxConcurrentClustering,
         new CustomizedThreadFactory("async_clustering_thread", isRunInDaemonMode()));
     return Pair.of(CompletableFuture.allOf(IntStream.range(0, maxConcurrentClustering).mapToObj(i -> CompletableFuture.supplyAsync(() -> {
       try {

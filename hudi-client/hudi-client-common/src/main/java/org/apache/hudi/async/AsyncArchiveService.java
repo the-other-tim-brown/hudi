@@ -39,11 +39,11 @@ public class AsyncArchiveService extends HoodieAsyncTableService {
   private static final Logger LOG = LoggerFactory.getLogger(AsyncArchiveService.class);
 
   private final BaseHoodieWriteClient writeClient;
-  private final transient ExecutorService executor = Executors.newSingleThreadExecutor();
 
   protected AsyncArchiveService(BaseHoodieWriteClient writeClient) {
     super(writeClient.getConfig());
     this.writeClient = writeClient;
+    this.executor = Executors.newSingleThreadExecutor();
   }
 
   @Override
