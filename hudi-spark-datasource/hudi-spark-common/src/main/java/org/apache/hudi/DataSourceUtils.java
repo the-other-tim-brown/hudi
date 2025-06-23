@@ -34,6 +34,7 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -138,8 +139,7 @@ public class DataSourceUtils {
   public static HoodieRecordPayload createPayload(String payloadClass, GenericRecord record, Comparable orderingVal)
       throws IOException {
     try {
-      return (HoodieRecordPayload) ReflectionUtils.loadClass(payloadClass,
-          new Class<?>[] {GenericRecord.class, Comparable.class}, record, orderingVal);
+      return HoodieRecordUtils.loadPayload(payloadClass, record, orderingVal);
     } catch (Throwable e) {
       throw new IOException("Could not create payload for class: " + payloadClass, e);
     }

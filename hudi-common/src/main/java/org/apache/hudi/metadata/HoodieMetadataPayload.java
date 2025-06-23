@@ -19,6 +19,7 @@
 package org.apache.hudi.metadata;
 
 import org.apache.hudi.avro.AvroSchemaCache;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieMetadataBloomFilter;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
@@ -39,6 +40,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.hash.ColumnIndexID;
 import org.apache.hudi.common.util.hash.FileIndexID;
 import org.apache.hudi.common.util.hash.PartitionIndexID;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.expression.HoodieExpressionIndex;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
@@ -47,10 +49,17 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.util.Lazy;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.KryoSerializable;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.avro.io.BinaryDecoder;
+import org.apache.avro.io.DecoderFactory;
+import org.apache.avro.specific.SpecificDatumReader;
 
 import javax.annotation.Nullable;
 
@@ -102,7 +111,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionStats
  * <p>
  * During compaction on the table, the deletions are merged with additions and hence records are pruned.
  */
-public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadataPayload> {
+public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadataPayload>, KryoSerializable {
   private static final Schema HOODIE_METADATA_SCHEMA = AvroSchemaCache.intern(HoodieMetadataRecord.getClassSchema());
   /**
    * Field offsets when metadata fields are present
@@ -765,5 +774,120 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     }
     sb.append('}');
     return sb.toString();
+  }
+
+  @Override
+  public void write(Kryo kryo, Output output) {
+    output.writeString(key);
+    output.writeInt(type);
+    output.writeBoolean(isDeletedRecord);
+    // for each field write out a marker for whether it is present or not and then the raw avro bytes
+    if (filesystemMetadata != null) {
+      output.writeBoolean(true);
+      // write entry count
+      output.writeInt(filesystemMetadata.size());
+      for (Map.Entry<String, HoodieMetadataFileInfo> entry : filesystemMetadata.entrySet()) {
+        output.writeString(entry.getKey());
+        byte[] bytes = HoodieAvroUtils.avroToBytes(entry.getValue());
+        output.writeInt(bytes.length);
+        output.writeBytes(bytes);
+      }
+    } else {
+      output.writeBoolean(false);
+    }
+    if (bloomFilterMetadata != null) {
+      output.writeBoolean(true);
+      byte[] bytes = HoodieAvroUtils.avroToBytes(bloomFilterMetadata);
+      output.writeInt(bytes.length);
+      output.writeBytes(bytes);
+    } else {
+      output.writeBoolean(false);
+    }
+    if (columnStatMetadata != null) {
+      output.writeBoolean(true);
+      byte[] bytes = HoodieAvroUtils.avroToBytes(columnStatMetadata);
+      output.writeInt(bytes.length);
+      output.writeBytes(bytes);
+    } else {
+      output.writeBoolean(false);
+    }
+    if (recordIndexMetadata != null) {
+      output.writeBoolean(true);
+      byte[] bytes = HoodieAvroUtils.avroToBytes(recordIndexMetadata);
+      output.writeInt(bytes.length);
+      output.writeBytes(bytes);
+    } else {
+      output.writeBoolean(false);
+    }
+    if (secondaryIndexMetadata != null) {
+      output.writeBoolean(true);
+      byte[] bytes = HoodieAvroUtils.avroToBytes(secondaryIndexMetadata);
+      output.writeInt(bytes.length);
+      output.writeBytes(bytes);
+    } else {
+      output.writeBoolean(false);
+    }
+  }
+
+  @Override
+  public void read(Kryo kryo, Input input) {
+    try {
+      key = input.readString();
+      type = input.readInt();
+      isDeletedRecord = input.readBoolean();
+      if (input.readBoolean()) {
+        int entryCount = input.readInt();
+        filesystemMetadata = new HashMap<>();
+        for (int i = 0; i < entryCount; i++) {
+          String fileName = input.readString();
+          int size = input.readInt();
+          byte[] bytes = input.readBytes(size);
+          HoodieMetadataFileInfo fileInfo = bytesToSpecificRecord(bytes, HoodieMetadataFileInfo.getClassSchema());
+          filesystemMetadata.put(fileName, fileInfo);
+        }
+      } else {
+        filesystemMetadata = null;
+      }
+      if (input.readBoolean()) {
+        int size = input.readInt();
+        byte[] bytes = input.readBytes(size);
+        bloomFilterMetadata = bytesToSpecificRecord(bytes, HoodieMetadataBloomFilter.getClassSchema());
+      } else {
+        bloomFilterMetadata = null;
+      }
+      if (input.readBoolean()) {
+        int size = input.readInt();
+        byte[] bytes = input.readBytes(size);
+        columnStatMetadata = bytesToSpecificRecord(bytes, HoodieMetadataColumnStats.getClassSchema());
+      } else {
+        columnStatMetadata = null;
+      }
+      if (input.readBoolean()) {
+        int size = input.readInt();
+        byte[] bytes = input.readBytes(size);
+        recordIndexMetadata = bytesToSpecificRecord(bytes, HoodieRecordIndexInfo.getClassSchema());
+      } else {
+        recordIndexMetadata = null;
+      }
+      if (input.readBoolean()) {
+        int size = input.readInt();
+        byte[] bytes = input.readBytes(size);
+        secondaryIndexMetadata = bytesToSpecificRecord(bytes, HoodieSecondaryIndexInfo.getClassSchema());
+      } else {
+        secondaryIndexMetadata = null;
+      }
+    } catch (IOException ex) {
+      throw new HoodieIOException("Failed to read HoodieMetadataPayload", ex);
+    }
+  }
+
+  private static <T> T bytesToSpecificRecord(byte[] bytes, Schema schema) throws IOException {
+    if (bytes == null || bytes.length == 0) {
+      return null;
+    }
+    BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(
+        bytes, 0, bytes.length, null);
+    SpecificDatumReader<T> specificDatumReader = new SpecificDatumReader<>(schema);
+    return specificDatumReader.read(null, decoder);
   }
 }

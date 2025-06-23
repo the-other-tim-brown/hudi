@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.index.expression.HoodieExpressionIndex;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 
 import java.nio.ByteBuffer;
@@ -269,11 +270,12 @@ public enum MetadataPartitionType {
 
   private static <T> T getNestedFieldValue(GenericRecord record, String fieldName) {
     // NOTE: This routine is more lightweight than {@code HoodieAvroUtils.getNestedFieldVal}
-    if (record.getSchema().getField(fieldName) == null) {
+    Schema.Field field = record.getSchema().getField(fieldName);
+    if (field == null) {
       return null;
     }
 
-    return unsafeCast(record.get(fieldName));
+    return unsafeCast(record.get(field.pos()));
   }
 
   private static void constructFilesMetadataPayload(HoodieMetadataPayload payload, GenericRecord record) {

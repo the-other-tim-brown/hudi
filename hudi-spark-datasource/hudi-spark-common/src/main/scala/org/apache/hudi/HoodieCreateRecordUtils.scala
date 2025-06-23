@@ -126,6 +126,7 @@ object HoodieCreateRecordUtils {
             DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()).toBoolean
           val precombine = config.getString(PRECOMBINE_FIELD)
           val precombineEmpty = StringUtils.isNullOrEmpty(precombine)
+          val payloadClass = config.getPayloadClass
 
           // handle dropping partition columns
           it.map { avroRec =>
@@ -147,10 +148,10 @@ object HoodieCreateRecordUtils {
               val orderingVal = HoodieAvroUtils.getNestedFieldVal(avroRec, precombine,
                 false, consistentLogicalTimestampEnabled).asInstanceOf[Comparable[_]]
               DataSourceUtils.createHoodieRecord(processedRecord, orderingVal, hoodieKey,
-                config.getPayloadClass, recordLocation)
+                payloadClass, recordLocation)
             } else {
               DataSourceUtils.createHoodieRecord(processedRecord, hoodieKey,
-                config.getPayloadClass, recordLocation)
+                payloadClass, recordLocation)
             }
             hoodieRecord
           }
