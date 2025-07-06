@@ -65,30 +65,14 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
   HoodieInstant createRequestedCommitWithReplaceMetadata(String instantTime, String actionType);
 
   /**
-   * Save Completed instant in active timeline.
-   * @param instant Instant to be saved.
-   * @param metadata metadata to write into the instant file
-   */
-  <T> void saveAsComplete(HoodieInstant instant, Option<T> metadata);
-
-  /**
-   * Save Completed instant in active timeline.
-   * @param shouldLock Lock before writing to timeline.
-   * @param instant Instant to be saved.
-   * @param metadata metadata to write into the instant file
-   */
-  <T> void saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata);
-
-  /**
    * Save Completed instant in active timeline with an optional completion time. For version 8 tables, completion times are generated just before wrapping up the commit and serialized as part of
    * completed commit metadata file.
-   * @param shouldLock Lock before writing to timeline.
    * @param instant Instant to be saved.
    * @param metadata metadata to write into the instant file
-   * @param completionTimeOpt an optinal instance of completion time.
+   * @param completionTime the completion time for the instant.
    * @param <T>
    */
-  <T> void saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata, Option<String> completionTimeOpt);
+  <T> void saveAsComplete(HoodieInstant instant, Option<T> metadata, String completionTime);
 
   /**
    * Delete Compaction requested instant file from timeline.
@@ -196,22 +180,20 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
   /**
    * Transition Compaction State from inflight to Committed.
    *
-   * @param shouldLock Whether to hold the lock when performing transition
    * @param inflightInstant Inflight instant
-   * @param metadata metadata to write into the instant file
+   * @param metadata        metadata to write into the instant file
    * @return commit instant
    */
-  HoodieInstant transitionCompactionInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieCommitMetadata metadata);
+  HoodieInstant transitionCompactionInflightToComplete(HoodieInstant inflightInstant, HoodieCommitMetadata metadata, String completionInstant);
 
   /**
    * Transition Log Compaction State from inflight to Committed.
    *
-   * @param shouldLock Whether to hold the lock when performing transition
    * @param inflightInstant Inflight instant
-   * @param metadata metadata to write into the instant file
+   * @param metadata        metadata to write into the instant file
    * @return commit instant
    */
-  HoodieInstant transitionLogCompactionInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieCommitMetadata metadata);
+  HoodieInstant transitionLogCompactionInflightToComplete(HoodieInstant inflightInstant, HoodieCommitMetadata metadata, String completionInstant);
 
   //-----------------------------------------------------------------
   //      END - COMPACTION RELATED META-DATA MANAGEMENT
@@ -220,12 +202,11 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
   /**
    * Transition Clean State from inflight to Committed.
    *
-   * @param shouldLock Whether to hold the lock when performing transition
    * @param inflightInstant Inflight instant
-   * @param metadata metadata to write into the instant file
+   * @param metadata        metadata to write into the instant file
    * @return commit instant
    */
-  HoodieInstant transitionCleanInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, Option<HoodieCleanMetadata> metadata);
+  HoodieInstant transitionCleanInflightToComplete(HoodieInstant inflightInstant, Option<HoodieCleanMetadata> metadata, String completionInstant);
 
   /**
    * Transition Clean State from requested to inflight.
@@ -238,12 +219,11 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
   /**
    * Transition Rollback State from inflight to Committed.
    *
-   * @param shouldLock Whether to hold the lock when performing transition
    * @param inflightInstant Inflight instant
-   * @param metadata metadata to write into the instant file
+   * @param metadata        metadata to write into the instant file
    * @return commit instant
    */
-  HoodieInstant transitionRollbackInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieRollbackMetadata metadata);
+  HoodieInstant transitionRollbackInflightToComplete(HoodieInstant inflightInstant, HoodieRollbackMetadata metadata, String completionInstant);
 
   /**
    * Transition Rollback State from requested to inflight.
@@ -282,22 +262,20 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
   /**
    * Transition replace inflight to Committed.
    *
-   * @param shouldLock Whether to hold the lock when performing transition
    * @param inflightInstant Inflight instant
-   * @param metadata metadata to write into the instant file
+   * @param metadata        metadata to write into the instant file
    * @return commit instant
    */
-  HoodieInstant transitionReplaceInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata);
+  HoodieInstant transitionReplaceInflightToComplete(HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata, String completionInstant);
 
   /**
    * Transition cluster inflight to replace committed.
    *
-   * @param shouldLock Whether to hold the lock when performing transition
    * @param inflightInstant Inflight instant
-   * @param metadata metadata to write into the instant file
+   * @param metadata        metadata to write into the instant file
    * @return commit instant
    */
-  HoodieInstant transitionClusterInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata);
+  HoodieInstant transitionClusterInflightToComplete(HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata, String completionInstant);
 
   /**
    * Save Restore requested instant with metadata.

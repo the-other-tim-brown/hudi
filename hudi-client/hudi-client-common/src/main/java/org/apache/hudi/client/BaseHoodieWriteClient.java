@@ -303,7 +303,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
                         String instantTime,
                         HoodieCommitMetadata metadata,
                         TableWriteStats tableWriteStats,
-                        boolean skipStreamingWritesToMetadataTable) throws IOException {
+                        boolean skipStreamingWritesToMetadataTable,
+                        String completionTime) throws IOException {
     LOG.info("Committing {} action {}", instantTime, commitActionType);
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     // Finalize write
@@ -315,7 +316,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
     // update Metadata table
     writeToMetadataTable(skipStreamingWritesToMetadataTable, table, instantTime, tableWriteStats.getMetadataTableWriteStats(), metadata);
-    activeTimeline.saveAsComplete(false, table.getMetaClient().createNewInstant(HoodieInstant.State.INFLIGHT, commitActionType, instantTime), Option.of(metadata));
+    activeTimeline.saveAsComplete(table.getMetaClient().createNewInstant(HoodieInstant.State.INFLIGHT, commitActionType, instantTime), Option.of(metadata), completionTime);
     // update cols to Index as applicable
     HoodieColumnStatsIndexUtils.updateColsToIndex(table, config, metadata, commitActionType,
         (Functions.Function2<HoodieTableMetaClient, List<String>, Void>) (metaClient, columnsToIndex) -> {

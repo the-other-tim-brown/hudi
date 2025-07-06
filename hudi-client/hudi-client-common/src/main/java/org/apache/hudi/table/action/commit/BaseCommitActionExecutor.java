@@ -233,9 +233,8 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
       writeTableMetadata(metadata, actionType);
       // cannot serialize maps with null values
       metadata.getExtraMetadata().entrySet().removeIf(entry -> entry.getValue() == null);
-      activeTimeline.saveAsComplete(false,
-          table.getMetaClient().createNewInstant(State.INFLIGHT, actionType, instantTime), Option.of(metadata));
-      LOG.info("Committed " + instantTime);
+      activeTimeline.saveAsComplete(table.getMetaClient().createNewInstant(State.INFLIGHT, actionType, instantTime), Option.of(metadata), txnManagerOption.get().createCompletionInstant());
+      LOG.info("Committed {}", instantTime);
       result.setCommitMetadata(Option.of(metadata));
       // update cols to Index as applicable
       HoodieColumnStatsIndexUtils.updateColsToIndex(table, config, metadata, actionType,
