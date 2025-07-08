@@ -306,22 +306,22 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
    * @return a value pair, left is boolean value `isDelete`, and right is engine row.
    * @throws IOException
    */
-  protected Pair<Boolean, T> merge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {
+  protected MergeResult<T> merge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {
     return bufferedRecordMerger.finalMerge(olderRecord, newerRecord);
   }
 
   protected boolean hasNextBaseRecord(T baseRecord, BufferedRecord<T> logRecordInfo) throws IOException {
     if (logRecordInfo != null) {
       BufferedRecord<T> baseRecordInfo = BufferedRecord.forRecordWithContext(baseRecord, readerSchema, readerContext, orderingFieldName, false);
-      Pair<Boolean, T> isDeleteAndRecord = merge(baseRecordInfo, logRecordInfo);
-      if (!isDeleteAndRecord.getLeft()) {
+      MergeResult<T> mergeResult = merge(baseRecordInfo, logRecordInfo);
+      if (mergeResult.isDelete()) {
         // Updates
-        nextRecord = readerContext.seal(isDeleteAndRecord.getRight());
+        nextRecord = readerContext.seal(mergeResult.getRecord());
         readStats.incrementNumUpdates();
         return true;
       } else if (emitDelete) {
         // emit Deletes
-        nextRecord = readerContext.getDeleteRow(isDeleteAndRecord.getRight(), baseRecordInfo.getRecordKey());
+        nextRecord = readerContext.getDeleteRow(mergeResult.getRecord(), baseRecordInfo.getRecordKey());
         readStats.incrementNumDeletes();
         return nextRecord != null;
       } else {
