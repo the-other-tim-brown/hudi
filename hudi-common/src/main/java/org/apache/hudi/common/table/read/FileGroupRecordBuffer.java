@@ -316,12 +316,12 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
       MergeResult<T> mergeResult = merge(baseRecordInfo, logRecordInfo);
       if (mergeResult.isDelete()) {
         // Updates
-        nextRecord = readerContext.seal(mergeResult.getRecord());
+        nextRecord = readerContext.seal(mergeResult.getMergedRecord());
         readStats.incrementNumUpdates();
         return true;
       } else if (emitDelete) {
         // emit Deletes
-        nextRecord = readerContext.getDeleteRow(mergeResult.getRecord(), baseRecordInfo.getRecordKey());
+        nextRecord = readerContext.getDeleteRow(mergeResult.getMergedRecord(), baseRecordInfo.getRecordKey());
         readStats.incrementNumDeletes();
         return nextRecord != null;
       } else {
