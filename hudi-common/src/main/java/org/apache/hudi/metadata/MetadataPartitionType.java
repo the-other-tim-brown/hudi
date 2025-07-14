@@ -454,6 +454,7 @@ public enum MetadataPartitionType {
     }
     return Arrays.stream(getValidValues())
         .filter(partitionType -> partitionType.isMetadataPartitionEnabled(dataMetadataConfig) || partitionType.isMetadataPartitionAvailable(metaClient))
+        .filter(partitionType -> partitionType != PARTITION_STATS  || metaClient.getTableConfig().isTablePartitioned())
         .collect(Collectors.toList());
   }
 
