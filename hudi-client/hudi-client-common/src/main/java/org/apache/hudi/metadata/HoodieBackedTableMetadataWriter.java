@@ -203,8 +203,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     this.storageConf = storageConf;
     this.metrics = Option.empty();
     this.dataMetaClient = HoodieTableMetaClient.builder().setConf(storageConf.newInstance())
-        .setBasePath(dataWriteConfig.getBasePath())
-        .setTimeGeneratorConfig(dataWriteConfig.getTimeGeneratorConfig()).build();
+        .setBasePath(dataWriteConfig.getBasePath()).build();
     this.enabledPartitionTypes = getEnabledPartitions(dataWriteConfig.getMetadataConfig(), dataMetaClient);
     if (writeConfig.isMetadataTableEnabled()) {
       this.metadataWriteConfig = createMetadataWriteConfig(writeConfig, failedWritesCleaningPolicy, dataMetaClient.getTableConfig().getTableVersion());
@@ -333,7 +332,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         metadataMetaClient = HoodieTableMetaClient.builder()
             .setConf(storageConf.newInstance())
             .setBasePath(metadataWriteConfig.getBasePath())
-            .setTimeGeneratorConfig(dataWriteConfig.getTimeGeneratorConfig()).build();
+            .build();
         if (DEFAULT_METADATA_POPULATE_META_FIELDS != metadataMetaClient.getTableConfig().populateMetaFields()) {
           LOG.info("Re-initiating metadata table properties since populate meta fields have changed");
           metadataMetaClient = initializeMetaClient();
@@ -407,7 +406,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       if (metadataMetaClient == null) {
         metadataMetaClient = HoodieTableMetaClient.builder()
             .setConf(storageConf.newInstance()).setBasePath(metadataWriteConfig.getBasePath())
-            .setTimeGeneratorConfig(dataWriteConfig.getTimeGeneratorConfig()).build();
+            .build();
       }
     }
 
@@ -864,7 +863,6 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     // reconcile the meta client with time generator config.
     return HoodieTableMetaClient.builder()
         .setBasePath(metadataWriteConfig.getBasePath()).setConf(storageConf.newInstance())
-        .setTimeGeneratorConfig(dataWriteConfig.getTimeGeneratorConfig())
         .build();
   }
 
