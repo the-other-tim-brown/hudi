@@ -31,7 +31,7 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 
 import org.apache.avro.SchemaBuilder
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReader
+import org.apache.spark.sql.execution.datasources.SparkColumnarFileReader
 import org.apache.spark.sql.sources.{And, IsNotNull, Or}
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String
@@ -85,11 +85,11 @@ class TestSparkFileFormatInternalRowReaderContext extends SparkClientFunctionalT
 
   @Test
   def testConvertValueToEngineType(): Unit = {
-    val reader = Mockito.mock(classOf[SparkParquetReader])
+    val reader = Mockito.mock(classOf[SparkColumnarFileReader])
     val stringValue = "string_value"
     val tableConfig = Mockito.mock(classOf[HoodieTableConfig])
     when(tableConfig.populateMetaFields()).thenReturn(true)
-    val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty, storageConf(), tableConfig)
+    val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, reader, Seq.empty, Seq.empty, storageConf(), tableConfig)
     assertEquals(1, sparkReaderContext.convertValueToEngineType(1))
     assertEquals(1L, sparkReaderContext.convertValueToEngineType(1L))
     assertEquals(1.1f, sparkReaderContext.convertValueToEngineType(1.1f))
