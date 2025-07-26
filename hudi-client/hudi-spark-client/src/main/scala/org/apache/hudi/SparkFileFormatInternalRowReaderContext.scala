@@ -24,7 +24,7 @@ import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
 import org.apache.hudi.avro.AvroSchemaUtils.isNullable
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
 import org.apache.hudi.common.util.ValidationUtils.checkState
@@ -32,6 +32,7 @@ import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator
 import org.apache.hudi.io.storage.{HoodieSparkFileReaderFactory, HoodieSparkParquetReader}
 import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
 import org.apache.hudi.util.CloseableInternalRowIterator
+
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, IndexedRecord}
 import org.apache.hadoop.conf.Configuration
@@ -73,7 +74,7 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
   private lazy val allFilters = filters ++ requiredFilters
 
   override def supportsParquetRowIndex: Boolean = {
-    HoodieSparkUtils.gteqSpark3_5
+    HoodieSparkUtils.gteqSpark3_5 && !tableConfig.isMultipleBaseFileFormatsEnabled && tableConfig.getBaseFileFormat == HoodieFileFormat.PARQUET
   }
 
   override def getFileRecordIterator(filePath: StoragePath,
