@@ -267,6 +267,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     } else {
       blockRecordsIterator = dataBlock.getEngineRecordIterator(readerContext);
     }
+    //
     Pair<Function<T, T>, Schema> schemaTransformerWithEvolvedSchema = getSchemaTransformerWithEvolvedSchema(dataBlock);
     return Pair.of(new CloseableMappingIterator<>(
         blockRecordsIterator, schemaTransformerWithEvolvedSchema.getLeft()), schemaTransformerWithEvolvedSchema.getRight());
