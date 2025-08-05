@@ -26,6 +26,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -129,19 +130,6 @@ public class DataSourceUtils {
           Option.of((BulkInsertPartitioner) ReflectionUtils.loadClass(bulkInsertPartitionerClass, config));
     } catch (Throwable e) {
       throw new HoodieException("Could not create UserDefinedBulkInsertPartitionerRows class " + bulkInsertPartitionerClass, e);
-    }
-  }
-
-  /**
-   * Create a payload class via reflection, passing in an ordering/precombine value.
-   */
-  public static HoodieRecordPayload createPayload(String payloadClass, GenericRecord record, Comparable orderingVal)
-      throws IOException {
-    try {
-      return (HoodieRecordPayload) ReflectionUtils.loadClass(payloadClass,
-          new Class<?>[] {GenericRecord.class, Comparable.class}, record, orderingVal);
-    } catch (Throwable e) {
-      throw new IOException("Could not create payload for class: " + payloadClass, e);
     }
   }
 
@@ -265,9 +253,8 @@ public class DataSourceUtils {
   }
 
   public static HoodieRecord createHoodieRecord(GenericRecord gr, Comparable orderingVal, HoodieKey hKey,
-      String payloadClass, scala.Option<HoodieRecordLocation> recordLocation) throws IOException {
-    HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr, orderingVal);
-    HoodieAvroRecord record = new HoodieAvroRecord<>(hKey, payload);
+                                                scala.Option<HoodieRecordLocation> recordLocation) throws IOException {
+    HoodieAvroIndexedRecord record = new HoodieAvroIndexedRecord(hKey, gr, orderingVal);
     if (recordLocation.isDefined()) {
       record.setCurrentLocation(recordLocation.get());
     }
@@ -275,9 +262,8 @@ public class DataSourceUtils {
   }
 
   public static HoodieRecord createHoodieRecord(GenericRecord gr, HoodieKey hKey,
-                                                String payloadClass, scala.Option<HoodieRecordLocation> recordLocation) throws IOException {
-    HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr);
-    HoodieAvroRecord record = new HoodieAvroRecord<>(hKey, payload);
+                                                scala.Option<HoodieRecordLocation> recordLocation) throws IOException {
+    HoodieAvroIndexedRecord record = new HoodieAvroIndexedRecord(hKey, gr);
     if (recordLocation.isDefined()) {
       record.setCurrentLocation(recordLocation.get());
     }

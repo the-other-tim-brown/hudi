@@ -90,6 +90,7 @@ public class HoodieRecordUtils {
   /**
    * Instantiate a given class with an avro record payload.
    */
+  // TODO replace all instances of this?
   public static <T extends HoodieRecordPayload> T loadPayload(String recordPayloadClass, GenericRecord record, Comparable orderingValue) {
     try {
       return (T) CONSTRUCTOR_CACHE.computeIfAbsent(recordPayloadClass, key -> {

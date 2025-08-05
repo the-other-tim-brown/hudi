@@ -35,7 +35,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileGroupId;
@@ -828,14 +828,14 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
   protected List<HoodieRecord> generate3AvroRecords(String commitTime) throws IOException {
     String recordKey = UUID.randomUUID().toString();
     HoodieKey keyOne = new HoodieKey(recordKey, "2018-01-01");
-    HoodieRecord<RawTripTestPayload> recordOne =
-            new HoodieAvroRecord(keyOne, dataGen.generateRandomValue(keyOne, commitTime), HoodieOperation.INSERT);
+    HoodieRecord recordOne =
+            new HoodieAvroIndexedRecord(keyOne, dataGen.generateRandomValue(keyOne, commitTime), HoodieOperation.INSERT);
     HoodieKey keyTwo = new HoodieKey(recordKey, "2018-02-01");
     HoodieRecord recordTwo =
-            new HoodieAvroRecord(keyTwo, dataGen.generateRandomValue(keyTwo, commitTime), HoodieOperation.INSERT);
+            new HoodieAvroIndexedRecord(keyTwo, dataGen.generateRandomValue(keyTwo, commitTime), HoodieOperation.INSERT);
     // Same key and partition as keyTwo
     HoodieRecord recordThree =
-            new HoodieAvroRecord(keyTwo, dataGen.generateRandomValue(keyTwo, commitTime), HoodieOperation.UPDATE_AFTER);
+            new HoodieAvroIndexedRecord(keyTwo, dataGen.generateRandomValue(keyTwo, commitTime), HoodieOperation.UPDATE_AFTER);
     return Arrays.asList(recordOne, recordTwo, recordThree);
   }
 

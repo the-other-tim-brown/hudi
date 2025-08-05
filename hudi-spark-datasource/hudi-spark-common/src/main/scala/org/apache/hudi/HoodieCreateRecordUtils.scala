@@ -149,11 +149,9 @@ object HoodieCreateRecordUtils {
                 JFunction.toJavaFunction[String, Comparable[_]](
                   field => HoodieAvroUtils.getNestedFieldVal(avroRec, field, false,
                     consistentLogicalTimestampEnabled).asInstanceOf[Comparable[_]]))
-              DataSourceUtils.createHoodieRecord(processedRecord, orderingVal, hoodieKey,
-                config.getPayloadClass, recordLocation)
+              DataSourceUtils.createHoodieRecord(processedRecord, orderingVal, hoodieKey, recordLocation)
             } else {
-              DataSourceUtils.createHoodieRecord(processedRecord, hoodieKey,
-                config.getPayloadClass, recordLocation)
+              DataSourceUtils.createHoodieRecord(processedRecord, hoodieKey, recordLocation)
             }
             hoodieRecord
           }

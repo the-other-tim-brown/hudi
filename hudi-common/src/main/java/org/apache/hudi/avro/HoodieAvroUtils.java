@@ -568,11 +568,11 @@ public class HoodieAvroUtils {
     return updated;
   }
 
-  public static GenericRecord addHoodieKeyToRecord(GenericRecord record, String recordKey, String partitionPath,
+  public static IndexedRecord addHoodieKeyToRecord(IndexedRecord record, String recordKey, String partitionPath,
                                                    String fileName) {
-    record.put(HoodieRecord.FILENAME_METADATA_FIELD, fileName);
-    record.put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, partitionPath);
-    record.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, recordKey);
+    record.put(HoodieRecord.FILENAME_META_FIELD_ORD, fileName);
+    record.put(HoodieRecord.PARTITION_PATH_META_FIELD_ORD, partitionPath);
+    record.put(HoodieRecord.RECORD_KEY_META_FIELD_ORD, recordKey);
     return record;
   }
 
@@ -584,9 +584,9 @@ public class HoodieAvroUtils {
   /**
    * Adds the Hoodie commit metadata into the provided Generic Record.
    */
-  public static GenericRecord addCommitMetadataToRecord(GenericRecord record, String instantTime, String commitSeqno) {
-    record.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, instantTime);
-    record.put(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, commitSeqno);
+  public static IndexedRecord addCommitMetadataToRecord(IndexedRecord record, String instantTime, String commitSeqno) {
+    record.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD, instantTime);
+    record.put(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD, commitSeqno);
     return record;
   }
 

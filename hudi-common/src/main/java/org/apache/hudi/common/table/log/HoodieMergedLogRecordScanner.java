@@ -293,7 +293,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     // Put the DELETE record
     if (recordType == HoodieRecord.HoodieRecordType.AVRO) {
       records.put(key, SpillableMapUtils.generateEmptyPayload(key,
-          deleteRecord.getPartitionPath(), deleteRecord.getOrderingValue(), getPayloadClassFQN()));
+          deleteRecord.getPartitionPath(), deleteRecord.getOrderingValue()));
     } else {
       HoodieEmptyRecord record = new HoodieEmptyRecord<>(new HoodieKey(key, deleteRecord.getPartitionPath()), null, deleteRecord.getOrderingValue(), recordType);
       records.put(key, record);

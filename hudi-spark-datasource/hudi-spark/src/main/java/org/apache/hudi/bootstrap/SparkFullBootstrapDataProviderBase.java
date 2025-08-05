@@ -29,7 +29,6 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieSparkRecord;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -84,8 +83,7 @@ public abstract class SparkFullBootstrapDataProviderBase extends FullRecordBoots
                 KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
                 Boolean.parseBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue())));
         try {
-          return DataSourceUtils.createHoodieRecord(gr, orderingVal, keyGenerator.getKey(gr),
-              ConfigUtils.getPayloadClass(props), scala.Option.apply(null));
+          return DataSourceUtils.createHoodieRecord(gr, orderingVal, keyGenerator.getKey(gr), scala.Option.empty());
         } catch (IOException ioe) {
           throw new HoodieIOException(ioe.getMessage(), ioe);
         }

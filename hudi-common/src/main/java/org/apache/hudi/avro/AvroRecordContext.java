@@ -21,16 +21,12 @@ package org.apache.hudi.avro;
 
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
-import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.AvroJavaTypeConverter;
-import org.apache.hudi.common.util.HoodieRecordUtils;
-import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.avro.Schema;
@@ -46,16 +42,14 @@ import java.util.Properties;
  */
 public class AvroRecordContext extends RecordContext<IndexedRecord> {
 
-  private final String payloadClass;
-  // This boolean indicates whether the caller requires payloads in the HoodieRecord conversion.
-  // This is temporarily required as we migrate away from payloads.
-  private final boolean requiresPayloadRecords;
-
   public AvroRecordContext(HoodieTableConfig tableConfig, String payloadClass, boolean requiresPayloadRecords) {
     super(tableConfig);
-    this.payloadClass = payloadClass;
     this.typeConverter = new AvroJavaTypeConverter();
-    this.requiresPayloadRecords = requiresPayloadRecords;
+  }
+
+  public AvroRecordContext() {
+    super();
+    this.typeConverter = new AvroJavaTypeConverter();
   }
 
   public static Object getFieldValueFromIndexedRecord(
@@ -93,26 +87,11 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   }
 
   @Override
-  public HoodieRecord constructHoodieRecord(BufferedRecord<IndexedRecord> bufferedRecord, String partitionPath) {
+  public HoodieRecord<IndexedRecord> constructHoodieRecord(BufferedRecord<IndexedRecord> bufferedRecord, String partitionPath) {
     // HoodieKey is not required so do not generate it if partitionPath is null
     HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
-
     if (bufferedRecord.isDelete()) {
-      if (payloadClass != null) {
-        return SpillableMapUtils.generateEmptyPayload(
-            bufferedRecord.getRecordKey(),
-            partitionPath,
-            bufferedRecord.getOrderingValue(),
-            payloadClass);
-      } else {
-        return new HoodieEmptyRecord<>(
-            hoodieKey,
-            HoodieRecord.HoodieRecordType.AVRO);
-      }
-    }
-    if (requiresPayloadRecords) {
-      HoodieRecordPayload payload = HoodieRecordUtils.loadPayload(payloadClass, (GenericRecord) bufferedRecord.getRecord(), bufferedRecord.getOrderingValue());
-      return new HoodieAvroRecord<>(hoodieKey, payload);
+      return new HoodieEmptyRecord<>(hoodieKey, HoodieRecord.HoodieRecordType.AVRO);
     }
     return new HoodieAvroIndexedRecord(hoodieKey, bufferedRecord.getRecord());
   }
@@ -128,8 +107,8 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
 
   @Override
   public IndexedRecord mergeWithEngineRecord(Schema schema,
-                                             Map<Integer, Object> updateValues,
-                                             BufferedRecord<IndexedRecord> baseRecord) {
+                                                   Map<Integer, Object> updateValues,
+                                                   BufferedRecord<IndexedRecord> baseRecord) {
     IndexedRecord engineRecord = baseRecord.getRecord();
     for (Map.Entry<Integer, Object> value : updateValues.entrySet()) {
       engineRecord.put(value.getKey(), value.getValue());

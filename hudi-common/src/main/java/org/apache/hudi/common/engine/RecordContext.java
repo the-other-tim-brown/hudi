@@ -74,6 +74,12 @@ public abstract class RecordContext<T> implements Serializable {
         .orElseThrow(() -> new IllegalArgumentException("No record keys specified and meta fields are not populated")));
   }
 
+  protected RecordContext() {
+    this.recordKeyExtractor = (record, schema) -> {
+      throw new UnsupportedOperationException("Record key extractor is not initialized");
+    };
+  }
+
   public void setPartitionPath(String partitionPath) {
     this.partitionPath = partitionPath;
   }
