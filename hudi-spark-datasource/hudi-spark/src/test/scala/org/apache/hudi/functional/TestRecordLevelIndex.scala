@@ -288,17 +288,24 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
       saveMode = SaveMode.Overwrite)
     insertDf.cache()
 
-    val deleteBatch = recordsToStrings(dataGen.generateUniqueDeleteRecords(getNewInstantTime, 1)).asScala
+    val instantTime = getNewInstantTime
+    // Issue two deletes, one with the original partition and one with an updated partition
+    val recordsToDelete = dataGen.generateUniqueDeleteRecords(instantTime, 1)
+    recordsToDelete.addAll(dataGen.generateUniqueDeleteRecordsWithUpdatedPartition(instantTime, 1))
+    val deleteBatch = recordsToStrings(recordsToDelete).asScala
     val deleteDf = spark.read.json(spark.sparkContext.parallelize(deleteBatch.toSeq, 1))
     deleteDf.cache()
-    val recordKeyToDelete = deleteDf.collectAsList().get(0).getAs("_row_key").asInstanceOf[String]
+    val recordKeyToDelete1 = deleteDf.collectAsList().get(0).getAs("_row_key").asInstanceOf[String]
+    val recordKeyToDelete2 = deleteDf.collectAsList().get(1).getAs("_row_key").asInstanceOf[String]
     deleteDf.write.format("org.apache.hudi")
       .options(hudiOpts)
       .mode(SaveMode.Append)
       .save(basePath)
     val prevDf = mergedDfList.last
-    mergedDfList = mergedDfList :+ prevDf.filter(row => row.getAs("_row_key").asInstanceOf[String] != recordKeyToDelete)
+    mergedDfList = mergedDfList :+ prevDf.filter(row => row.getAs("_row_key").asInstanceOf[String] != recordKeyToDelete1 &&
+      row.getAs("_row_key").asInstanceOf[String] != recordKeyToDelete2)
     validateDataAndRecordIndices(hudiOpts, deleteDf)
+    deleteDf.unpersist()
   }
 
   @ParameterizedTest
