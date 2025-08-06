@@ -19,7 +19,10 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.GenericAvroSerializer;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -139,6 +142,9 @@ public class SerializationUtils {
       kryo.register(HoodieBaseFile.class);
       kryo.register(HoodieLogFile.class);
       kryo.register(TreeSet.class);
+      kryo.register(HoodieAvroRecord.class);
+      kryo.register(HoodieAvroIndexedRecord.class);
+      kryo.register(DefaultHoodieRecordPayload.class);
 
       return kryo;
     }

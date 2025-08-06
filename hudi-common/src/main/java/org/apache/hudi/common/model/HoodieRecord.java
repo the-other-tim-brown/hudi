@@ -399,7 +399,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
    *       JIT compiler could perform more aggressive optimizations
    */
   @Override
-  public final void read(Kryo kryo, Input input) {
+  public void read(Kryo kryo, Input input) {
     this.key = kryo.readObjectOrNull(input, HoodieKey.class);
     this.operation = kryo.readObjectOrNull(input, HoodieOperation.class);
     this.currentLocation = (HoodieRecordLocation) kryo.readClassAndObject(input);

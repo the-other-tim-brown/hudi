@@ -50,40 +50,42 @@ import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELD
 public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   private static final long serialVersionUID = 1L;
   private static final AvroRecordContext AVRO_RECORD_CONTEXT = new AvroRecordContext();
+  private HoodieIndexedRecord optimizedRecord;
 
   public HoodieAvroIndexedRecord(IndexedRecord data) {
-    super(null, new HoodieIndexedRecord(data));
+    this(null, data, null, null, null);
   }
 
   public HoodieAvroIndexedRecord(IndexedRecord data, Comparable orderingValue) {
-    super(null, new HoodieIndexedRecord(data));
+    this(null, data, null, null, null);
     this.orderingValue = orderingValue;
   }
 
   public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data) {
-    super(key, new HoodieIndexedRecord(data));
+    this(key, data, null, null, null);
   }
 
   public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, HoodieRecordLocation currentLocation) {
-    super(key, new HoodieIndexedRecord(data), null, currentLocation, null);
+    this(key, data, null, currentLocation, null);
   }
 
   public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, Comparable<?> orderingValue) {
-    super(key, new HoodieIndexedRecord(data), null, null, null);
+    this(key, data, null, null, null);
     this.orderingValue = orderingValue;
   }
 
   public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, Comparable<?> orderingValue, HoodieOperation operation) {
-    super(key, new HoodieIndexedRecord(data), operation, null, null);
+    this(key, data, operation, null, null);
     this.orderingValue = orderingValue;
   }
 
   public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, HoodieOperation operation, HoodieRecordLocation currentLocation, HoodieRecordLocation newLocation) {
     super(key, new HoodieIndexedRecord(data), operation, currentLocation, newLocation);
+    this.optimizedRecord = (HoodieIndexedRecord) this.data;
   }
 
   public HoodieAvroIndexedRecord(IndexedRecord data, HoodieRecordLocation currentLocation) {
-    super(null, new HoodieIndexedRecord(data), null, currentLocation, null);
+    this(null, data, null, currentLocation, null);
   }
 
   public HoodieAvroIndexedRecord(
@@ -92,13 +94,16 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
       HoodieOperation operation,
       Option<Map<String, String>> metaData) {
     super(key, new HoodieIndexedRecord(data), operation, metaData);
+    this.optimizedRecord = (HoodieIndexedRecord) this.data;
   }
 
   HoodieAvroIndexedRecord(HoodieRecord<IndexedRecord> record) {
     super(record);
+    this.optimizedRecord = (HoodieIndexedRecord) this.data;
   }
 
   public HoodieAvroIndexedRecord() {
+    this.optimizedRecord = (HoodieIndexedRecord) this.data;
   }
 
   @Override
@@ -265,7 +270,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   private void setSchema(Schema recordSchema) {
-    ((HoodieIndexedRecord) data).setSchema(recordSchema);
+    optimizedRecord.setSchema(recordSchema);
   }
 
   @Override
@@ -325,5 +330,11 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
         avroRecord.put(HoodieMetadataField.values()[pos].getFieldName(), value);
       }
     }
+  }
+
+  @Override
+  public void read(Kryo kryo, Input input) {
+    super.read(kryo, input);
+    this.optimizedRecord = (HoodieIndexedRecord) this.data;
   }
 }

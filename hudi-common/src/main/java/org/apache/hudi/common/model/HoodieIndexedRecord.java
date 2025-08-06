@@ -34,7 +34,6 @@ import java.io.IOException;
 
 class HoodieIndexedRecord implements IndexedRecord, GenericRecord, KryoSerializable {
   private IndexedRecord record;
-  private Schema schema;
   private byte[] recordBytes;
 
   HoodieIndexedRecord(IndexedRecord record) {
@@ -48,12 +47,12 @@ class HoodieIndexedRecord implements IndexedRecord, GenericRecord, KryoSerializa
 
   @Override
   public Object get(int i) {
-    return getRecord().get(i);
+    return record.get(i);
   }
 
   @Override
   public Schema getSchema() {
-    return getRecord().getSchema();
+    return record.getSchema();
   }
 
   private byte[] getRecordBytes() {
@@ -64,10 +63,6 @@ class HoodieIndexedRecord implements IndexedRecord, GenericRecord, KryoSerializa
   }
 
   void setSchema(Schema schema) {
-    this.schema = schema;
-  }
-
-  private IndexedRecord getRecord() {
     if (record == null) {
       try {
         record = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
@@ -75,7 +70,6 @@ class HoodieIndexedRecord implements IndexedRecord, GenericRecord, KryoSerializa
         throw new HoodieIOException("Failed to parse record into provided schema", e);
       }
     }
-    return record;
   }
 
   @Override
@@ -93,13 +87,13 @@ class HoodieIndexedRecord implements IndexedRecord, GenericRecord, KryoSerializa
 
   @Override
   public void put(String key, Object v) {
-    Schema.Field field = getRecord().getSchema().getField(key);
+    Schema.Field field = record.getSchema().getField(key);
     record.put(field.pos(), v);
   }
 
   @Override
   public Object get(String key) {
-    Schema.Field field = getRecord().getSchema().getField(key);
-    return getRecord().get(field.pos());
+    Schema.Field field = record.getSchema().getField(key);
+    return record.get(field.pos());
   }
 }
