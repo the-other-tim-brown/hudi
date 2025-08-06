@@ -1184,6 +1184,14 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     return numKeysBySchema.getOrDefault(schemaStr, 0);
   }
 
+  public List<String> getExistingKeys() {
+    return getExistingKeys(TRIP_EXAMPLE_SCHEMA);
+  }
+
+  public List<String> getExistingKeys(String schemaStr) {
+    return existingKeysBySchema.get(schemaStr).values().stream().map(kp -> kp.key.getRecordKey()).collect(Collectors.toList());
+  }
+
   /**
    * Object containing the key and partition path for testing.
    */
