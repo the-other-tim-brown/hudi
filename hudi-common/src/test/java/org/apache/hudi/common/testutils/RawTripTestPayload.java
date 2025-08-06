@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.testutils;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.MercifulJsonConverter;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -153,12 +154,12 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
 
   public static Option<String> recordToString(HoodieRecord record) {
     try {
-      String str = ((RawTripTestPayload) record.getData()).getJsonData();
+      String str = HoodieAvroUtils.safeAvroToJsonString((GenericRecord) record.getData());
       str = "{" + str.substring(str.indexOf("\"timestamp\":"));
       // Remove the last } bracket
       str = str.substring(0, str.length() - 1);
       return Option.of(str + ", \"partition\": \"" + record.getPartitionPath() + "\"}");
-    } catch (IOException e) {
+    } catch (Exception e) {
       return Option.empty();
     }
   }

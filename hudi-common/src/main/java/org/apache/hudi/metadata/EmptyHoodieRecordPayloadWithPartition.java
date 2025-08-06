@@ -30,7 +30,7 @@ import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
  * that info. Hence, this wrapper class
  */
 public class EmptyHoodieRecordPayloadWithPartition extends EmptyHoodieRecordPayload {
-  private final String partitionPath;
+  private final String partitionPath; // TODO look for usage
 
   public EmptyHoodieRecordPayloadWithPartition(String partitionPath) {
     this.partitionPath = partitionPath;

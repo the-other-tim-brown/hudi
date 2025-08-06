@@ -41,7 +41,7 @@ public class DeleteContext implements Serializable {
 
   private final Option<Pair<String, String>> customDeleteMarkerKeyValue;
   private final boolean hasBuiltInDeleteField;
-  private int hoodieOperationPos;
+  private int hoodieOperationPos = -1; // TODO
   private Schema readerSchema;
 
   public DeleteContext(Properties props, Schema tableSchema) {

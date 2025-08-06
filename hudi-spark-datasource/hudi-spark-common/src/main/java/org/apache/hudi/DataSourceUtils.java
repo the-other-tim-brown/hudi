@@ -254,6 +254,7 @@ public class DataSourceUtils {
 
   public static HoodieRecord createHoodieRecord(GenericRecord gr, Comparable orderingVal, HoodieKey hKey,
                                                 scala.Option<HoodieRecordLocation> recordLocation) throws IOException {
+    // TODO: if the payload class is some user defined payload, do we need to send this through as their payload?
     HoodieAvroIndexedRecord record = new HoodieAvroIndexedRecord(hKey, gr, orderingVal);
     if (recordLocation.isDefined()) {
       record.setCurrentLocation(recordLocation.get());
