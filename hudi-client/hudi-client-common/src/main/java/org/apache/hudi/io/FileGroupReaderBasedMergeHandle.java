@@ -172,7 +172,8 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
 
   private void initRecordIndexCallback() {
     if (this.writeStatus.isTrackingSuccessfulWrites()) {
-      this.recordIndexCallbackOpt = Option.of(new RecordLevelIndexCallback(writeStatus, newRecordLocation, partitionPath));
+      writeStatus.manuallyTrackSuccess();
+      this.recordIndexCallbackOpt = Option.of(new RecordLevelIndexCallback<>(writeStatus, newRecordLocation, partitionPath));
     } else {
       this.recordIndexCallbackOpt = Option.empty();
     }
@@ -182,7 +183,6 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     LOG.info("partitionPath:{}, fileId to be merged:{}", partitionPath, fileId);
     this.baseFileToMerge = operation.getBaseFile(config.getBasePath(), operation.getPartitionPath()).orElse(null);
     this.writtenRecordKeys = new HashSet<>();
-    writeStatus.manuallyTrackSuccess();
     writeStatus.setStat(new HoodieWriteStat());
     writeStatus.getStat().setTotalLogSizeCompacted(
         operation.getMetrics().get(CompactionStrategy.TOTAL_LOG_FILE_SIZE).longValue());
@@ -541,11 +541,5 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     public void onDelete(String recordKey, BufferedRecord<T> previousRecord, HoodieOperation hoodieOperation) {
       this.callbacks.forEach(callback -> callback.onDelete(recordKey, previousRecord, hoodieOperation));
     }
-  }
-
-  enum HoodieRecordUpdateState {
-    INSERT,
-    UPDATE,
-    DELETE
   }
 }
