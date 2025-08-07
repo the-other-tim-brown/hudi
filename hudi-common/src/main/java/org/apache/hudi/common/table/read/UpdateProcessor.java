@@ -104,13 +104,12 @@ public interface UpdateProcessor<T> {
     @Override
     public BufferedRecord<T> processUpdate(String recordKey, BufferedRecord<T> previousRecord, BufferedRecord<T> currentRecord, boolean isDelete) {
       BufferedRecord<T> result = delegate.processUpdate(recordKey, previousRecord, currentRecord, isDelete);
-
       if (isDelete) {
-        callback.onDelete(recordKey, previousRecord.getRecord());
+        callback.onDelete(recordKey, previousRecord, currentRecord.getHoodieOperation());
       } else if (previousRecord != null && previousRecord.getRecord() != currentRecord.getRecord()) {
-        callback.onUpdate(recordKey, previousRecord.getRecord(), currentRecord.getRecord());
-      } else {
-        callback.onInsert(recordKey, currentRecord.getRecord());
+        callback.onUpdate(recordKey, previousRecord, currentRecord);
+      } else if (previousRecord == null) {
+        callback.onInsert(recordKey, currentRecord);
       }
       return result;
     }

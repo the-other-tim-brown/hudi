@@ -135,15 +135,21 @@ public class TestMergeHandle extends BaseTestHandle {
     // numUpdates + numDeletes - new record index updates
     assertEquals(numUpdates + numDeletes, writeStatus.getIndexStats().getWrittenRecordDelegates().size());
     int numDeletedRecordDelegates = 0;
+    int numDeletedRecordDelegatesWithIgnoreIndexUpdate = 0;
     for (HoodieRecordDelegate recordDelegate : writeStatus.getIndexStats().getWrittenRecordDelegates()) {
       if (!recordDelegate.getNewLocation().isPresent()) {
         numDeletedRecordDelegates++;
+        if (recordDelegate.getIgnoreIndexUpdate()) {
+          numDeletedRecordDelegatesWithIgnoreIndexUpdate++;
+        }
       } else {
         assertTrue(recordDelegate.getNewLocation().isPresent());
         assertEquals(fileId, recordDelegate.getNewLocation().get().getFileId());
         assertEquals(instantTime, recordDelegate.getNewLocation().get().getInstantTime());
       }
     }
+    // 5 of the deletes are marked with ignoreIndexUpdate in generateDeleteRecords
+    assertEquals(5, numDeletedRecordDelegatesWithIgnoreIndexUpdate);
     assertEquals(numDeletes, numDeletedRecordDelegates);
 
     // verify secondary index stats

@@ -86,7 +86,7 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
         } else {
           // HoodieRecord#isDelete does not check if a record is a DELETE marked by a custom delete marker,
           // so we use recordContext#isDeleteRecord here if the data field is not null.
-          boolean isDelete = recordContext.isDeleteRecord(data, recordBuffer.getDeleteContext());
+          boolean isDelete = hoodieRecord.isDelete(recordSchema, props);
           // use -U operation to identify the record should be skipped during updating index.
           HoodieOperation hoodieOperation = hoodieRecord.getIgnoreIndexUpdate() ? HoodieOperation.UPDATE_BEFORE : hoodieRecord.getOperation();
           BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(data, recordSchema, recordContext, orderingFieldNames, hoodieOperation, isDelete);
