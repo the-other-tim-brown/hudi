@@ -19,11 +19,9 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
@@ -105,12 +103,8 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
                                          TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
     this.operation = Option.empty();
-    // to do: fix this to getReaderContextFactoryForWrite after we land the dedup and global index path fix.
-    this.readerContext = hoodieTable.getContext().<T>getReaderContextFactory(hoodieTable.getMetaClient()).getContext();
-    if (config.getEngineType() == EngineType.SPARK) { // AVRO
-      this.readerContext = (HoodieReaderContext<T>) new HoodieAvroReaderContext(hoodieTable.getMetaClient().getStorageConf(), hoodieTable.getMetaClient().getTableConfig(), Option.empty(),
-          Option.empty());
-    }
+    this.readerContext = (HoodieReaderContext<T>) hoodieTable.getContext().getReaderContextFactoryForWrite(hoodieTable.getMetaClient(),
+        config.getRecordMerger().getRecordType(), config.getProps()).getContext();
     TypedProperties properties = config.getProps();
     properties.putAll(hoodieTable.getMetaClient().getTableConfig().getProps());
     this.readerContext.initRecordMerger(properties);

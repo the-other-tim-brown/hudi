@@ -282,7 +282,9 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
   def testRLIForDeletesWithHoodieIsDeletedColumn(tableType: HoodieTableType): Unit = {
-    val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
+    val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name()) +
+      (HoodieIndexConfig.INDEX_TYPE.key -> "RECORD_INDEX") +
+      (HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE.key -> "true")
     val insertDf = doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite)
@@ -329,6 +331,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     val rows: java.util.List[Row] = util.Arrays.asList(convertToRow.apply(existingKeys.get(0)), convertToRow.apply(existingKeys.get(1)))
     val deleteDf = spark.createDataFrame(rows, structType)
     validateDataAndRecordIndices(hudiOpts, deleteDf)
+    deleteDf.unpersist()
   }
 
   @ParameterizedTest
