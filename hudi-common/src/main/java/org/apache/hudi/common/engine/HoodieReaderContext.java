@@ -58,6 +58,7 @@ import java.util.function.UnaryOperator;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
+import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 
 /**
  * An abstract reader context class for {@code HoodieFileGroupReader} to use, containing APIs for
@@ -374,5 +375,18 @@ public abstract class HoodieReaderContext<T> {
 
   public final UnaryOperator<T> projectRecord(Schema from, Schema to) {
     return projectRecord(from, to, Collections.emptyMap());
+  }
+
+  public Option<Pair<String, String>> getPayloadClasses(TypedProperties props) {
+    return getRecordMerger().map(merger -> {
+      if (merger.getMergingStrategy().equals(PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {
+        String incomingPayloadClass = tableConfig.getPayloadClass();
+        if (props.containsKey("hoodie.datasource.write.payload.class")) {
+          incomingPayloadClass = props.getString("hoodie.datasource.write.payload.class");
+        }
+        return Pair.of(tableConfig.getPayloadClass(), incomingPayloadClass);
+      }
+      return null;
+    });
   }
 }
