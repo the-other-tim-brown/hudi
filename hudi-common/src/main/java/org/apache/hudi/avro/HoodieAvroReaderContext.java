@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -65,6 +66,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  */
 public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> {
   private final Map<StoragePath, HoodieAvroFileReader> reusableFileReaders;
+  private final boolean isMultiFormat;
 
   /**
    * Constructs an instance of the reader context that will read data into Avro records.
@@ -126,6 +128,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       boolean requiresPayloadRecords) {
     super(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, new AvroRecordContext(tableConfig, payloadClassName, requiresPayloadRecords));
     this.reusableFileReaders = reusableFileReaders;
+    this.isMultiFormat = tableConfig.isMultipleBaseFileFormatsEnabled();
   }
 
   @Override
@@ -140,9 +143,10 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
     if (reusableFileReaders.containsKey(filePath)) {
       reader = reusableFileReaders.get(filePath);
     } else {
+      HoodieFileFormat fileFormat = isMultiFormat && !FSUtils.isLogFile(filePath) ? HoodieFileFormat.fromFileExtension(filePath.getFileExtension()) : baseFileFormat;
       reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
           .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(new HoodieConfig(),
-              filePath, HoodieFileFormat.fromFileExtension(filePath.getFileExtension()), Option.empty());
+              filePath, fileFormat, Option.empty());
     }
     if (keyFilterOpt.isEmpty()) {
       return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
