@@ -62,17 +62,17 @@ import static org.apache.hudi.avro.AvroSchemaUtils.findNestedField;
  */
 public class FileGroupReaderSchemaHandler<T> {
 
-  protected Schema tableSchema;
+  protected final Schema tableSchema;
 
   // requestedSchema: the schema that the caller requests
   protected final Schema requestedSchema;
 
   // requiredSchema: the requestedSchema with any additional columns required for merging etc
-  protected Schema requiredSchema;
+  protected final Schema requiredSchema;
 
-  protected final InternalSchema querySchema;
+  protected final InternalSchema internalSchema;
 
-  protected final Option<InternalSchema> querySchemaOpt;
+  protected final Option<InternalSchema> internalSchemaOpt;
 
   protected final HoodieTableConfig hoodieTableConfig;
 
@@ -96,8 +96,8 @@ public class FileGroupReaderSchemaHandler<T> {
     this.hoodieTableConfig = hoodieTableConfig;
     this.deleteContext = new DeleteContext(properties, tableSchema);
     this.requiredSchema = AvroSchemaCache.intern(prepareRequiredSchema(this.deleteContext));
-    this.querySchema = pruneInternalSchema(requiredSchema, internalSchemaOpt);
-    this.querySchemaOpt = getInternalSchemaOpt(querySchema);
+    this.internalSchema = pruneInternalSchema(requiredSchema, internalSchemaOpt);
+    this.internalSchemaOpt = getInternalSchemaOpt(internalSchemaOpt);
     this.metaClient = metaClient;
   }
 
@@ -113,21 +113,21 @@ public class FileGroupReaderSchemaHandler<T> {
     return this.requiredSchema;
   }
 
-  public InternalSchema getQuerySchema() {
-    return this.querySchema;
+  public InternalSchema getInternalSchema() {
+    return this.internalSchema;
   }
 
-  public Option<InternalSchema> getQuerySchemaOpt() {
-    return this.querySchemaOpt;
+  public Option<InternalSchema> getInternalSchemaOpt() {
+    return this.internalSchemaOpt;
   }
 
   public Pair<Schema, Map<String, String>> getRequiredSchemaForFileAndRenamedColumns(StoragePath path) {
-    if (querySchema.isEmptySchema()) {
+    if (internalSchema.isEmptySchema()) {
       return Pair.of(requiredSchema, Collections.emptyMap());
     }
     long commitInstantTime = Long.parseLong(FSUtils.getCommitTime(path.getName()));
     InternalSchema fileSchema = InternalSchemaCache.searchSchemaAndCache(commitInstantTime, metaClient);
-    Pair<InternalSchema, Map<String, String>> mergedInternalSchema = new InternalSchemaMerger(fileSchema, querySchema,
+    Pair<InternalSchema, Map<String, String>> mergedInternalSchema = new InternalSchemaMerger(fileSchema, internalSchema,
         true, false, false).mergeSchemaGetRenamed();
     Schema mergedAvroSchema = AvroSchemaCache.intern(AvroInternalSchemaConverter.convert(mergedInternalSchema.getLeft(), requiredSchema.getFullName()));
     return Pair.of(mergedAvroSchema, mergedInternalSchema.getRight());
@@ -156,8 +156,8 @@ public class FileGroupReaderSchemaHandler<T> {
     return doPruneInternalSchema(requiredSchema, notPruned);
   }
 
-  protected Option<InternalSchema> getInternalSchemaOpt(InternalSchema internalSchema) {
-    return Option.of(internalSchema);
+  protected Option<InternalSchema> getInternalSchemaOpt(Option<InternalSchema> internalSchemaOpt) {
+    return internalSchemaOpt;
   }
 
   protected InternalSchema doPruneInternalSchema(Schema requiredSchema, InternalSchema internalSchema) {

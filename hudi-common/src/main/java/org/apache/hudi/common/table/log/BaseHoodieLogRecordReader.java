@@ -166,7 +166,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
     this.instantRange = instantRange;
     this.withOperationField = withOperationField;
     this.forceFullScan = forceFullScan;
-    this.internalSchema = readerContext.getSchemaHandler() != null ? readerContext.getSchemaHandler().getQuerySchema() : null;
+    this.internalSchema = readerContext.getSchemaHandler() != null ? readerContext.getSchemaHandler().getInternalSchema() : null;
     this.enableOptimizedLogBlocksScan = enableOptimizedLogBlocksScan;
 
     if (keyFieldOverride.isPresent()) {
