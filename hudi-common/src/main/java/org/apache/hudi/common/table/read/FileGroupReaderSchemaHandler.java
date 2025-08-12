@@ -73,10 +73,6 @@ public class FileGroupReaderSchemaHandler<T> {
 
   protected final Option<InternalSchema> querySchemaOpt;
 
-  protected Option<InternalSchema> baseFileSchemaOpt;
-
-  protected Option<Pair<Schema, UnaryOperator<T>>> baseRecordConverter;
-
   protected Map<String, String> renamedColumns;
 
   protected final HoodieTableConfig hoodieTableConfig;
@@ -108,14 +104,10 @@ public class FileGroupReaderSchemaHandler<T> {
 
   private void initBaseFileSchemaOpt(Option<HoodieBaseFile> baseFileOption, HoodieTableMetaClient hoodieTableMetaClient) {
     if (baseFileOption.isEmpty()) {
-      this.baseFileSchemaOpt = Option.empty();
-      this.baseRecordConverter = Option.empty();
       this.renamedColumns = Collections.emptyMap();
       return;
     }
     if (querySchema.isEmptySchema()) {
-      this.baseFileSchemaOpt = getInternalSchemaOpt(InternalSchema.getEmptyInternalSchema());
-      this.baseRecordConverter = Option.empty();
       this.renamedColumns = Collections.emptyMap();
       return;
     }
@@ -124,14 +116,7 @@ public class FileGroupReaderSchemaHandler<T> {
     Pair<InternalSchema, Map<String, String>> mergedInternalSchema = new InternalSchemaMerger(fileSchema, querySchema,
         true, false, false).mergeSchemaGetRenamed();
     Schema mergedAvroSchema = AvroInternalSchemaConverter.convert(mergedInternalSchema.getLeft(), requiredSchema.getFullName());
-    Schema fileAvroSchema = AvroInternalSchemaConverter.buildAvroSchemaFromInternalSchema(fileSchema, requestedSchema.getFullName());
     this.renamedColumns = mergedInternalSchema.getRight();
-    this.baseFileSchemaOpt = getInternalSchemaOpt(mergedInternalSchema.getLeft());
-    this.baseRecordConverter = Option.of(Pair.of(tableSchema, readerContext.projectRecord(fileAvroSchema, mergedAvroSchema, mergedInternalSchema.getRight())));
-  }
-
-  public Option<Pair<Schema, UnaryOperator<T>>> getBaseRecordConverter() {
-    return baseRecordConverter;
   }
 
   public Schema getTableSchema() {
@@ -152,10 +137,6 @@ public class FileGroupReaderSchemaHandler<T> {
 
   public Option<InternalSchema> getQuerySchemaOpt() {
     return this.querySchemaOpt;
-  }
-
-  public Option<InternalSchema> getBaseFileSchemaOpt() {
-    return baseFileSchemaOpt;
   }
 
   public Map<String, String> getRenamedColumns() {
