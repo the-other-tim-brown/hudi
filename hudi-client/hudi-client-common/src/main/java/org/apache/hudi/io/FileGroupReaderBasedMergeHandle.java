@@ -295,7 +295,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
         this.recordsDeleted = readStats.getNumDeletes();
       }
     } catch (IOException e) {
-      throw new HoodieUpsertException("Failed to compact file group: " + fileId, e);
+      throw new HoodieUpsertException("Failed to merge file group: " + fileId, e);
     }
   }
 

@@ -107,7 +107,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
     this.orderingFieldNames = orderingFieldNames;
     // Ensure that ordering field is populated for mergers and legacy payloads
     this.props = ConfigUtils.supplementOrderingFields(props, orderingFieldNames);
-    this.internalSchema = readerContext.getSchemaHandler().getInternalSchema();
+    this.internalSchema = readerContext.getSchemaHandler().getQuerySchema();
     this.hoodieTableMetaClient = hoodieTableMetaClient;
     String spillableMapBasePath = props.getString(SPILLABLE_MAP_BASE_PATH.key(), FileIOUtils.getDefaultSpillableMapBasePath());
     try {

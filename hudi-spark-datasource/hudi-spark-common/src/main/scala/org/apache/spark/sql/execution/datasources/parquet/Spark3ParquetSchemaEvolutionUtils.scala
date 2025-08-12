@@ -56,7 +56,7 @@ class Spark3ParquetSchemaEvolutionUtils(sharedConf: Configuration,
   private lazy val schemaUtils: HoodieSchemaUtils = sparkAdapter.getSchemaUtils
 
   private lazy val tablePath: String = sharedConf.get(SparkInternalSchemaConverter.HOODIE_TABLE_PATH)
-  private lazy val fileSchema: InternalSchema = if (shouldUseInternalSchema) {
+  private lazy val fileSchema: InternalSchema = if (shouldUseInternalSchema && tablePath != null) {
     val commitInstantTime = FSUtils.getCommitTime(filePath.getName).toLong;
     //TODO: HARDCODED TIMELINE OBJECT
     val validCommits = sharedConf.get(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST)
@@ -134,7 +134,7 @@ class Spark3ParquetSchemaEvolutionUtils(sharedConf: Configuration,
   def getHadoopConfClone(footerFileMetaData: FileMetaData, enableVectorizedReader: Boolean): Configuration = {
     // Clone new conf
     val hadoopAttemptConf = new Configuration(sharedConf)
-    typeChangeInfos = if (shouldUseInternalSchema) {
+    typeChangeInfos = if (shouldUseInternalSchema && fileSchema != null) {
       val mergedInternalSchema = new InternalSchemaMerger(fileSchema, querySchemaOption.get(), true, true).mergeSchema()
       val mergedSchema = SparkInternalSchemaConverter.constructSparkSchemaFromInternalSchema(mergedInternalSchema)
 

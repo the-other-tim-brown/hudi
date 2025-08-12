@@ -96,8 +96,8 @@ public class InternalSchemaCache {
         historicalSchemas = getHistoricalSchemas(metaClient);
         HISTORICAL_SCHEMA_CACHE.put(tablePath, historicalSchemas);
       } else {
-        long maxVersionId = historicalSchemas.keySet().stream().max(Long::compareTo).get();
-        if (versionID > maxVersionId) {
+        Option<Long> maxVersionId = Option.fromJavaOptional(historicalSchemas.keySet().stream().max(Long::compareTo));
+        if (maxVersionId.map(max -> versionID > max).orElse(true)) {
           historicalSchemas = getHistoricalSchemas(metaClient);
           HISTORICAL_SCHEMA_CACHE.put(tablePath, historicalSchemas);
         }

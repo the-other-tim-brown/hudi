@@ -502,7 +502,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
     readerContext.initRecordMerger(readerProperties)
     readerContext.setSchemaHandler(
       new FileGroupReaderSchemaHandler[InternalRow](readerContext, avroSchema, avroSchema,
-        Option.empty(), metaClient.getTableConfig, readerProperties))
+        Option.empty(), metaClient.getTableConfig, readerProperties, metaClient, Option.empty()))
     val stats = new HoodieReadStats
     val recordBuffer = new KeyBasedFileGroupRecordBuffer[InternalRow](readerContext, metaClient, readerContext.getMergeMode,
       metaClient.getTableConfig.getPartialUpdateMode, readerProperties, metaClient.getTableConfig.getPreCombineFields,

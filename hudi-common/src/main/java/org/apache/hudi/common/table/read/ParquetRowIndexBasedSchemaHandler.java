@@ -21,7 +21,9 @@ package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
@@ -45,10 +47,12 @@ public class ParquetRowIndexBasedSchemaHandler<T> extends FileGroupReaderSchemaH
   public ParquetRowIndexBasedSchemaHandler(HoodieReaderContext<T> readerContext,
                                            Schema dataSchema,
                                            Schema requestedSchema,
-                                           Option<InternalSchema> internalSchemaOpt,
+                                           Option<InternalSchema> querySchemaOpt,
                                            HoodieTableConfig hoodieTableConfig,
-                                           TypedProperties properties) {
-    super(readerContext, dataSchema, requestedSchema, internalSchemaOpt, hoodieTableConfig, properties);
+                                           TypedProperties properties,
+                                           HoodieTableMetaClient metaClient,
+                                           Option<HoodieBaseFile> baseFileOption) {
+    super(readerContext, dataSchema, requestedSchema, querySchemaOpt, hoodieTableConfig, properties, metaClient, baseFileOption);
     if (!readerContext.getRecordContext().supportsParquetRowIndex()) {
       throw new IllegalStateException("Using " + this.getClass().getName() + " but context does not support parquet row index");
     }
@@ -63,8 +67,11 @@ public class ParquetRowIndexBasedSchemaHandler<T> extends FileGroupReaderSchemaH
   }
 
   @Override
-  protected Option<InternalSchema> getInternalSchemaOpt(Option<InternalSchema> internalSchemaOpt) {
-    return internalSchemaOpt.map(ParquetRowIndexBasedSchemaHandler::addPositionalMergeCol);
+  protected Option<InternalSchema> getInternalSchemaOpt(InternalSchema internalSchema) {
+    if (internalSchema.isEmptySchema()) {
+      return Option.empty();
+    }
+    return Option.of(ParquetRowIndexBasedSchemaHandler.addPositionalMergeCol(internalSchema));
   }
 
   @Override
@@ -78,6 +85,9 @@ public class ParquetRowIndexBasedSchemaHandler<T> extends FileGroupReaderSchemaH
   }
 
   private static InternalSchema addPositionalMergeCol(InternalSchema internalSchema) {
+    if (internalSchema.hasColumn(ROW_INDEX_TEMPORARY_COLUMN_NAME, true)) {
+      return internalSchema; // already has the column
+    }
     TableChanges.ColumnAddChange addChange = TableChanges.ColumnAddChange.get(internalSchema);
     addChange.addColumns("", ROW_INDEX_TEMPORARY_COLUMN_NAME, Types.LongType.get(), null);
     return SchemaChangeUtils.applyTableChanges2Schema(internalSchema, addChange);

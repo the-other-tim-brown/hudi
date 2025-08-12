@@ -841,6 +841,7 @@ public abstract class AbstractHoodieLogRecordScanner {
     if (internalSchema.isEmptySchema()) {
       return Option.empty();
     }
+    // TODO look here an fgreader code for log record reader
 
     long currentInstantTime = Long.parseLong(dataBlock.getLogBlockHeader().get(INSTANT_TIME));
     InternalSchema fileSchema = InternalSchemaCache.searchSchemaAndCache(currentInstantTime, hoodieTableMetaClient);

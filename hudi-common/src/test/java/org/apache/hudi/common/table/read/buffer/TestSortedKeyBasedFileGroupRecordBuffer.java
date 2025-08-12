@@ -124,7 +124,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     readerContext.setHasLogFiles(false);
     readerContext.setHasBootstrapBaseFile(false);
     FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext, SCHEMA, SCHEMA, Option.empty(), tableConfig,
-        properties);
+        properties, null, Option.empty());
     readerContext.setSchemaHandler(schemaHandler);
     readerContext.initRecordMerger(properties);
     List<HoodieRecord> inputRecords =
@@ -188,7 +188,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
 
   private SortedKeyBasedFileGroupRecordBuffer<TestRecord> buildSortedKeyBasedFileGroupRecordBuffer(HoodieReaderContext<TestRecord> mockReaderContext, HoodieReadStats readStats) {
     when(mockReaderContext.getSchemaHandler().getRequiredSchema()).thenReturn(HoodieTestDataGenerator.AVRO_SCHEMA);
-    when(mockReaderContext.getSchemaHandler().getInternalSchema()).thenReturn(InternalSchema.getEmptyInternalSchema());
+    when(mockReaderContext.getSchemaHandler().getQuerySchema()).thenReturn(InternalSchema.getEmptyInternalSchema());
     when(mockReaderContext.getRecordContext().getDeleteRow(any())).thenAnswer(invocation -> {
       String recordKey = invocation.getArgument(0);
       return new TestRecord(recordKey, 0);

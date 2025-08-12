@@ -30,6 +30,7 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
@@ -57,15 +58,15 @@ public class InternalSchemaUtils {
     List<Integer> prunedIds = names.stream().map(name -> {
       int id = schema.findIdByName(name);
       if (id == -1) {
-        throw new IllegalArgumentException(String.format("cannot prune col: %s which does not exist in hudi table", name));
+        return null;
       }
       return id;
-    }).collect(Collectors.toList());
+    }).filter(Objects::nonNull).collect(Collectors.toList());
     // find top parent field ID. eg: a.b.c, f.g.h, only collect id of a and f ignore all child field.
     List<Integer> topParentFieldIds = new ArrayList<>();
-    names.stream().forEach(f -> {
+    names.forEach(f -> {
       int id = schema.findIdByName(f.split("\\.")[0]);
-      if (!topParentFieldIds.contains(id)) {
+      if (!topParentFieldIds.contains(id) && id != -1) {
         topParentFieldIds.add(id);
       }
     });
