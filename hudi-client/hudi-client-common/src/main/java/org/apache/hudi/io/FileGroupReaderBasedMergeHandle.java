@@ -20,6 +20,7 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -46,6 +47,7 @@ import org.apache.hudi.common.util.collection.MappingIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -252,7 +254,9 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
   @Override
   public void doMerge() {
     boolean usePosition = config.getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);
-    Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema());
+    Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema())
+        .map(internalSchema -> AvroSchemaEvolutionUtils.reconcileSchema(writeSchemaWithMetaFields, internalSchema,
+            config.getBooleanOrDefault(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS)));
     long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(taskContextSupplier, config);
     props.put(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(maxMemoryPerCompaction));
     Option<Stream<HoodieLogFile>> logFilesStreamOpt = operation.map(op -> op.getDeltaFileNames().stream().map(logFileName ->
