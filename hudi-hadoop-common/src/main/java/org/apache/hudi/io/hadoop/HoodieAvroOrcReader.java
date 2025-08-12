@@ -99,7 +99,7 @@ public class HoodieAvroOrcReader extends HoodieAvroFileReader {
       TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(prunedFileSchema);
       RecordReader recordReader = reader.rows(new Options(hadoopConf).schema(orcSchema));
       ClosableIterator<IndexedRecord> recordIterator = new OrcReaderIterator<>(recordReader, prunedFileSchema, orcSchema);
-      if (readerSchema.equals(fileSchema)) {
+      if (renamedColumns.isEmpty() && readerSchema.equals(fileSchema)) {
         return recordIterator;
       } else {
         return new CloseableMappingIterator<>(recordIterator, data -> HoodieAvroUtils.rewriteRecordWithNewSchema(data, requestedSchema, renamedColumns));

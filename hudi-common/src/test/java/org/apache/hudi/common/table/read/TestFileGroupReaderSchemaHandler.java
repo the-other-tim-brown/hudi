@@ -121,7 +121,7 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
   FileGroupReaderSchemaHandler createSchemaHandler(HoodieReaderContext<String> readerContext, Schema dataSchema, Schema requestedSchema, HoodieTableConfig hoodieTableConfig,
                                                    boolean supportsParquetRowIndex) {
     return new FileGroupReaderSchemaHandler(readerContext, dataSchema, requestedSchema,
-        Option.empty(), hoodieTableConfig, new TypedProperties(), null, Option.empty());
+        Option.empty(), hoodieTableConfig, new TypedProperties(), null);
   }
 
   @ParameterizedTest
@@ -235,7 +235,7 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
             ? Option.of(Pair.of(customDeleteKey, customDeleteValue)) : Option.empty(),
         deleteContext.getCustomDeleteMarkerKeyValue());
     FileGroupReaderSchemaHandler fileGroupReaderSchemaHandler = new FileGroupReaderSchemaHandler(readerContext,
-        dataSchema, requestedSchema, Option.empty(), tableConfig, props, null, Option.empty());
+        dataSchema, requestedSchema, Option.empty(), tableConfig, props, null);
     Schema actualSchema = fileGroupReaderSchemaHandler.generateRequiredSchema(deleteContext);
     assertEquals(expectedSchema, actualSchema);
   }

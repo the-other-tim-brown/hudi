@@ -141,7 +141,16 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       HoodieStorage storage) throws IOException {
     HoodieAvroFileReader reader;
     boolean isLogFile = FSUtils.isLogFile(filePath);
-    Schema fileOutputSchema = isLogFile ? dataSchema : getSchemaHandler().getRequiredSchemaWithEvolution();
+    Schema fileOutputSchema;
+    Map<String, String> renamedColumns;
+    if (isLogFile) {
+      fileOutputSchema = dataSchema;
+      renamedColumns = Collections.emptyMap();
+    } else {
+      Pair<Schema, Map<String, String>> requiredSchemaForFileAndRenamedColumns = getSchemaHandler().getRequiredSchemaForFileAndRenamedColumns(filePath);
+      fileOutputSchema = requiredSchemaForFileAndRenamedColumns.getLeft();
+      renamedColumns = requiredSchemaForFileAndRenamedColumns.getRight();
+    }
     if (reusableFileReaders.containsKey(filePath)) {
       reader = reusableFileReaders.get(filePath);
     } else {
@@ -151,7 +160,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
               filePath, fileFormat, Option.empty());
     }
     if (keyFilterOpt.isEmpty()) {
-      return reader.getIndexedRecordIterator(dataSchema, fileOutputSchema, getSchemaHandler().getRenamedColumns());
+      return reader.getIndexedRecordIterator(dataSchema, fileOutputSchema, renamedColumns);
     }
     if (reader.supportKeyPredicate()) {
       List<String> keys = reader.extractKeys(keyFilterOpt);
@@ -165,7 +174,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
         return reader.getIndexedRecordsByKeyPrefixIterator(keyPrefixes, requiredSchema);
       }
     }
-    return reader.getIndexedRecordIterator(dataSchema, fileOutputSchema, getSchemaHandler().getRenamedColumns());
+    return reader.getIndexedRecordIterator(dataSchema, fileOutputSchema, renamedColumns);
   }
 
   @Override

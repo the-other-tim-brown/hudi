@@ -23,7 +23,7 @@ import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -37,6 +37,7 @@ import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 
@@ -69,13 +70,9 @@ public class FileGroupReaderSchemaHandler<T> {
   // requiredSchema: the requestedSchema with any additional columns required for merging etc
   protected Schema requiredSchema;
 
-  protected Schema requiredSchemaWithEvolution;
-
   protected final InternalSchema querySchema;
 
   protected final Option<InternalSchema> querySchemaOpt;
-
-  protected Map<String, String> renamedColumns;
 
   protected final HoodieTableConfig hoodieTableConfig;
 
@@ -83,6 +80,7 @@ public class FileGroupReaderSchemaHandler<T> {
 
   protected final TypedProperties properties;
   private final DeleteContext deleteContext;
+  private final HoodieTableMetaClient metaClient;
 
   public FileGroupReaderSchemaHandler(HoodieReaderContext<T> readerContext,
                                       Schema tableSchema,
@@ -90,8 +88,7 @@ public class FileGroupReaderSchemaHandler<T> {
                                       Option<InternalSchema> internalSchemaOpt,
                                       HoodieTableConfig hoodieTableConfig,
                                       TypedProperties properties,
-                                      HoodieTableMetaClient metaClient,
-                                      Option<HoodieBaseFile> baseFile) {
+                                      HoodieTableMetaClient metaClient) {
     this.properties = properties;
     this.readerContext = readerContext;
     this.tableSchema = tableSchema;
@@ -101,26 +98,7 @@ public class FileGroupReaderSchemaHandler<T> {
     this.requiredSchema = AvroSchemaCache.intern(prepareRequiredSchema(this.deleteContext));
     this.querySchema = pruneInternalSchema(requiredSchema, internalSchemaOpt);
     this.querySchemaOpt = getInternalSchemaOpt(querySchema);
-    initBaseFileSchemaOpt(baseFile, metaClient);
-  }
-
-  private void initBaseFileSchemaOpt(Option<HoodieBaseFile> baseFileOption, HoodieTableMetaClient hoodieTableMetaClient) {
-    this.requiredSchemaWithEvolution = requiredSchema;
-    if (baseFileOption.isEmpty()) {
-      this.renamedColumns = Collections.emptyMap();
-      return;
-    }
-    if (querySchema.isEmptySchema()) {
-      this.renamedColumns = Collections.emptyMap();
-      return;
-    }
-    HoodieBaseFile baseFile = baseFileOption.get();
-    InternalSchema fileSchema = InternalSchemaCache.searchSchemaAndCache(Long.parseLong(baseFile.getCommitTime()), hoodieTableMetaClient);
-    Pair<InternalSchema, Map<String, String>> mergedInternalSchema = new InternalSchemaMerger(fileSchema, querySchema,
-        true, false, false).mergeSchemaGetRenamed();
-    Schema mergedAvroSchema = AvroInternalSchemaConverter.convert(mergedInternalSchema.getLeft(), requiredSchema.getFullName());
-    this.requiredSchemaWithEvolution = mergedAvroSchema; // TODO: This needs to be validated
-    this.renamedColumns = mergedInternalSchema.getRight();
+    this.metaClient = metaClient;
   }
 
   public Schema getTableSchema() {
@@ -135,10 +113,6 @@ public class FileGroupReaderSchemaHandler<T> {
     return this.requiredSchema;
   }
 
-  public Schema getRequiredSchemaWithEvolution() {
-    return requiredSchemaWithEvolution;
-  }
-
   public InternalSchema getQuerySchema() {
     return this.querySchema;
   }
@@ -147,8 +121,16 @@ public class FileGroupReaderSchemaHandler<T> {
     return this.querySchemaOpt;
   }
 
-  public Map<String, String> getRenamedColumns() {
-    return renamedColumns;
+  public Pair<Schema, Map<String, String>> getRequiredSchemaForFileAndRenamedColumns(StoragePath path) {
+    if (querySchema.isEmptySchema()) {
+      return Pair.of(requiredSchema, Collections.emptyMap());
+    }
+    long commitInstantTime = Long.parseLong(FSUtils.getCommitTime(path.getName()));
+    InternalSchema fileSchema = InternalSchemaCache.searchSchemaAndCache(commitInstantTime, metaClient);
+    Pair<InternalSchema, Map<String, String>> mergedInternalSchema = new InternalSchemaMerger(fileSchema, querySchema,
+        true, false, false).mergeSchemaGetRenamed();
+    Schema mergedAvroSchema = AvroSchemaCache.intern(AvroInternalSchemaConverter.convert(mergedInternalSchema.getLeft(), requiredSchema.getFullName()));
+    return Pair.of(mergedAvroSchema, mergedInternalSchema.getRight());
   }
 
   public Option<UnaryOperator<T>> getOutputConverter() {
