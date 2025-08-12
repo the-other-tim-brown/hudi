@@ -61,13 +61,15 @@ import static org.apache.hudi.avro.AvroSchemaUtils.findNestedField;
  */
 public class FileGroupReaderSchemaHandler<T> {
 
-  protected final Schema tableSchema;
+  protected Schema tableSchema;
 
   // requestedSchema: the schema that the caller requests
   protected final Schema requestedSchema;
 
   // requiredSchema: the requestedSchema with any additional columns required for merging etc
-  protected final Schema requiredSchema;
+  protected Schema requiredSchema;
+
+  protected Schema requiredSchemaWithEvolution;
 
   protected final InternalSchema querySchema;
 
@@ -103,6 +105,7 @@ public class FileGroupReaderSchemaHandler<T> {
   }
 
   private void initBaseFileSchemaOpt(Option<HoodieBaseFile> baseFileOption, HoodieTableMetaClient hoodieTableMetaClient) {
+    this.requiredSchemaWithEvolution = requiredSchema;
     if (baseFileOption.isEmpty()) {
       this.renamedColumns = Collections.emptyMap();
       return;
@@ -116,6 +119,7 @@ public class FileGroupReaderSchemaHandler<T> {
     Pair<InternalSchema, Map<String, String>> mergedInternalSchema = new InternalSchemaMerger(fileSchema, querySchema,
         true, false, false).mergeSchemaGetRenamed();
     Schema mergedAvroSchema = AvroInternalSchemaConverter.convert(mergedInternalSchema.getLeft(), requiredSchema.getFullName());
+    this.requiredSchemaWithEvolution = mergedAvroSchema; // TODO: This needs to be validated
     this.renamedColumns = mergedInternalSchema.getRight();
   }
 
@@ -129,6 +133,10 @@ public class FileGroupReaderSchemaHandler<T> {
 
   public Schema getRequiredSchema() {
     return this.requiredSchema;
+  }
+
+  public Schema getRequiredSchemaWithEvolution() {
+    return requiredSchemaWithEvolution;
   }
 
   public InternalSchema getQuerySchema() {

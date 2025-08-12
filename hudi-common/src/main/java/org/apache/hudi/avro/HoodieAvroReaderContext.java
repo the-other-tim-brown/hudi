@@ -140,18 +140,18 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       Schema requiredSchema,
       HoodieStorage storage) throws IOException {
     HoodieAvroFileReader reader;
-    Schema baseSchema = dataSchema;
+    boolean isLogFile = FSUtils.isLogFile(filePath);
+    Schema fileOutputSchema = isLogFile ? dataSchema : getSchemaHandler().getRequiredSchemaWithEvolution();
     if (reusableFileReaders.containsKey(filePath)) {
       reader = reusableFileReaders.get(filePath);
     } else {
-      boolean isLogFile = FSUtils.isLogFile(filePath);
       HoodieFileFormat fileFormat = isMultiFormat && !isLogFile ? HoodieFileFormat.fromFileExtension(filePath.getFileExtension()) : baseFileFormat;
       reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
           .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(new HoodieConfig(),
               filePath, fileFormat, Option.empty());
     }
     if (keyFilterOpt.isEmpty()) {
-      return reader.getIndexedRecordIterator(baseSchema, requiredSchema, getSchemaHandler().getRenamedColumns());
+      return reader.getIndexedRecordIterator(dataSchema, fileOutputSchema, getSchemaHandler().getRenamedColumns());
     }
     if (reader.supportKeyPredicate()) {
       List<String> keys = reader.extractKeys(keyFilterOpt);
@@ -165,7 +165,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
         return reader.getIndexedRecordsByKeyPrefixIterator(keyPrefixes, requiredSchema);
       }
     }
-    return reader.getIndexedRecordIterator(baseSchema, requiredSchema, getSchemaHandler().getRenamedColumns());
+    return reader.getIndexedRecordIterator(dataSchema, fileOutputSchema, getSchemaHandler().getRenamedColumns());
   }
 
   @Override

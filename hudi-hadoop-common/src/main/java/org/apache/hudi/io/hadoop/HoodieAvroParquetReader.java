@@ -102,17 +102,17 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
 
   @Override
   protected ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema schema) throws IOException {
-    return getIndexedRecordIteratorInternal(schema, Collections.emptyMap());
+    return getIndexedRecordIteratorInternal(schema, schema, Collections.emptyMap());
   }
 
   @Override
   public ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
-    return getIndexedRecordIteratorInternal(requestedSchema, Collections.emptyMap());
+    return getIndexedRecordIteratorInternal(readerSchema, requestedSchema, Collections.emptyMap());
   }
 
   @Override
   public ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema, Map<String, String> renamedColumns) throws IOException {
-    return getIndexedRecordIteratorInternal(requestedSchema, renamedColumns);
+    return getIndexedRecordIteratorInternal(readerSchema, requestedSchema, renamedColumns);
   }
 
   @Override
@@ -173,7 +173,7 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
     return conf;
   }
 
-  private ClosableIterator<IndexedRecord> getIndexedRecordIteratorInternal(Schema schema, Map<String, String> renamedColumns) throws IOException {
+  private ClosableIterator<IndexedRecord> getIndexedRecordIteratorInternal(Schema readerSchema, Schema requestedSchema, Map<String, String> renamedColumns) throws IOException {
     // NOTE: We have to set both Avro read-schema and projection schema to make
     //       sure that in case the file-schema is not equal to read-schema we'd still
     //       be able to read that file (in case projection is a proper one)
@@ -182,10 +182,10 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
     if (true) {
       AvroReadSupport.setAvroReadSchema(hadoopConf, getSchema());
       AvroReadSupport.setRequestedProjection(hadoopConf, getSchema());
-      promotedSchema = Option.of(schema);
+      promotedSchema = Option.of(requestedSchema);
     } else {
-      AvroReadSupport.setAvroReadSchema(hadoopConf, schema);
-      AvroReadSupport.setRequestedProjection(hadoopConf, schema);
+      AvroReadSupport.setAvroReadSchema(hadoopConf, requestedSchema);
+      AvroReadSupport.setRequestedProjection(hadoopConf, requestedSchema);
     }
     ParquetReader<IndexedRecord> reader =
         new HoodieAvroParquetReaderBuilder<IndexedRecord>(path).withConf(hadoopConf)
