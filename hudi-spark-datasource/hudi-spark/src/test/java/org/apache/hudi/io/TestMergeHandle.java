@@ -29,7 +29,6 @@ import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
-import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -55,7 +54,6 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
 import org.apache.hudi.table.HoodieSparkTable;
-import org.apache.hudi.table.action.commit.HoodieMergeHelper;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -80,6 +78,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.AssertionsKt.assertNull;
@@ -127,26 +126,23 @@ public class TestMergeHandle extends BaseTestHandle {
     List<HoodieRecord> newRecords = dataGenerator.generateUniqueUpdates(instantTime, numUpdates);
     int numDeletes = generateDeleteRecords(newRecords, dataGenerator, instantTime);
     assertTrue(numDeletes > 0);
-    HoodieWriteMergeHandle mergeHandle = new HoodieWriteMergeHandle(config, instantTime, table, newRecords.iterator(), partitionPath, fileId, new LocalTaskContextSupplier(),
-        new HoodieBaseFile(fileGroup.getAllBaseFiles().findFirst().get()), Option.empty());
-    HoodieMergeHelper.newInstance().runMerge(table, mergeHandle);
-    WriteStatus writeStatus = mergeHandle.writeStatus;
+    FileGroupReaderBasedMergeHandle mergeHandle = new FileGroupReaderBasedMergeHandle(config, instantTime, table, newRecords.iterator(), partitionPath, fileId,
+        new LocalTaskContextSupplier(), Option.empty());
+    mergeHandle.doMerge();
+    WriteStatus writeStatus = (WriteStatus) mergeHandle.close().get(0);
     // verify stats after merge
     assertEquals(100 - numDeletes, writeStatus.getStat().getNumWrites());
     assertEquals(numUpdates, writeStatus.getStat().getNumUpdateWrites());
     assertEquals(numDeletes, writeStatus.getStat().getNumDeletes());
 
     // verify record index stats
-    // numUpdates + numDeletes - new record index updates
-    assertEquals(numUpdates + numDeletes, writeStatus.getIndexStats().getWrittenRecordDelegates().size());
+    // Number of index updates = numUpdates + numDeletes - new record - 5 (deletes with update-before operation to skip index update)
+    assertEquals(numUpdates + numDeletes - 5, writeStatus.getIndexStats().getWrittenRecordDelegates().size());
     int numDeletedRecordDelegates = 0;
-    int numDeletedRecordDelegatesWithIgnoreIndexUpdate = 0;
     for (HoodieRecordDelegate recordDelegate : writeStatus.getIndexStats().getWrittenRecordDelegates()) {
       if (!recordDelegate.getNewLocation().isPresent()) {
         numDeletedRecordDelegates++;
-        if (recordDelegate.getIgnoreIndexUpdate()) {
-          numDeletedRecordDelegatesWithIgnoreIndexUpdate++;
-        }
+        assertFalse(recordDelegate.getIgnoreIndexUpdate(), "ignoreIndexUpdate should not be emitted");
       } else {
         assertTrue(recordDelegate.getNewLocation().isPresent());
         assertEquals(fileId, recordDelegate.getNewLocation().get().getFileId());
@@ -154,8 +150,7 @@ public class TestMergeHandle extends BaseTestHandle {
       }
     }
     // 5 of the deletes are marked with ignoreIndexUpdate in generateDeleteRecords
-    assertEquals(5, numDeletedRecordDelegatesWithIgnoreIndexUpdate);
-    assertEquals(numDeletes, numDeletedRecordDelegates);
+    assertEquals(numDeletes - 5, numDeletedRecordDelegates);
 
     // verify secondary index stats
     assertEquals(1, writeStatus.getIndexStats().getSecondaryIndexStats().size());
@@ -462,7 +457,7 @@ public class TestMergeHandle extends BaseTestHandle {
 
     List<GenericRecord> genericRecords = hoodieRecords.stream().map(insertRecord -> {
       try {
-        GenericRecord genericRecord = (GenericRecord) ((HoodieRecordPayload) insertRecord.getData()).getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA, config.getProps()).get();
+        GenericRecord genericRecord = (GenericRecord) insertRecord.toIndexedRecord(HoodieTestDataGenerator.AVRO_SCHEMA, config.getProps()).get().getData();
         genericRecord.put(ORDERING_FIELD, orderingValue);
         return genericRecord;
       } catch (IOException e) {
@@ -476,7 +471,7 @@ public class TestMergeHandle extends BaseTestHandle {
   private List<HoodieRecord> generateDeletes(List<HoodieRecord> hoodieRecords, HoodieWriteConfig config, String payloadClass, String partitionPath, long orderingValue) {
     List<GenericRecord> genericRecords = hoodieRecords.stream().map(deleteRecord -> {
       try {
-        GenericRecord genericRecord = (GenericRecord) ((HoodieRecordPayload) deleteRecord.getData()).getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA, config.getProps()).get();
+        GenericRecord genericRecord = (GenericRecord) deleteRecord.toIndexedRecord(HoodieTestDataGenerator.AVRO_SCHEMA, config.getProps()).get().getData();
         genericRecord.put(ORDERING_FIELD, orderingValue);
         genericRecord.put(HoodieRecord.HOODIE_IS_DELETED_FIELD, true);
         return genericRecord;
@@ -489,7 +484,7 @@ public class TestMergeHandle extends BaseTestHandle {
 
   private GenericRecord getGenRecord(HoodieRecord hoodieRecord, HoodieWriteConfig config) {
     try {
-      return (GenericRecord) ((HoodieRecordPayload) hoodieRecord.getData()).getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA, config.getProps()).get();
+      return (GenericRecord) hoodieRecord.toIndexedRecord(HoodieTestDataGenerator.AVRO_SCHEMA, config.getProps()).get().getData();
     } catch (IOException e) {
       throw new HoodieIOException("Failed to deser record ", e);
     }
