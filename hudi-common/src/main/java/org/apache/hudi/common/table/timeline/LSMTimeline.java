@@ -33,6 +33,7 @@ import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
@@ -169,15 +170,17 @@ public class LSMTimeline {
    * Returns all the valid snapshot versions.
    */
   public static List<Integer> allSnapshotVersions(HoodieTableMetaClient metaClient, StoragePath archivePath) throws IOException {
-    if (!metaClient.getStorage().exists(archivePath)) {
+    try {
+      return metaClient.getStorage().listDirectEntries(archivePath,
+              getManifestFilePathFilter())
+          .stream()
+          .map(fileStatus -> fileStatus.getPath().getName())
+          .map(LSMTimeline::getManifestVersion)
+          .collect(Collectors.toList());
+    } catch (FileNotFoundException ex) {
+      LOG.debug("Archive path {} does not exist", archivePath);
       return Collections.emptyList();
     }
-    return metaClient.getStorage().listDirectEntries(archivePath,
-            getManifestFilePathFilter())
-        .stream()
-        .map(fileStatus -> fileStatus.getPath().getName())
-        .map(LSMTimeline::getManifestVersion)
-        .collect(Collectors.toList());
   }
 
   /**

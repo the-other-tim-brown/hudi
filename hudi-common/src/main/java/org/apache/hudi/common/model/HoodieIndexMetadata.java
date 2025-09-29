@@ -114,6 +114,13 @@ public class HoodieIndexMetadata implements Serializable {
     return JsonUtils.getObjectMapper().readValue(json, HoodieIndexMetadata.class);
   }
 
+  public static HoodieIndexMetadata fromJson(byte[] json) throws IOException {
+    if (json == null || json.length == 0) {
+      return new HoodieIndexMetadata();
+    }
+    return JsonUtils.getObjectMapper().readValue(json, HoodieIndexMetadata.class);
+  }
+
   @Override
   public String toString() {
     return new StringJoiner(", ", HoodieIndexMetadata.class.getSimpleName() + "[", "]")

@@ -23,6 +23,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 
 import java.util.Iterator;
@@ -89,6 +90,12 @@ public class HoodieListData<T> extends HoodieBaseListData<T> implements HoodieDa
    */
   public static <T> HoodieListData<T> lazy(List<T> listData) {
     return new HoodieListData<>(listData, true);
+  }
+
+  public static <T> HoodieListData<T> lazy(ClosableIterator<T> iterator) {
+    Stream<T> stream = StreamSupport.stream(
+        Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), true).onClose(iterator::close);
+    return new HoodieListData<>(stream, true);
   }
 
   @Override

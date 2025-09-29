@@ -55,6 +55,7 @@ public class TimelineDTO {
     InstantGenerator instantGenerator = metaClient.getInstantGenerator();
     TimelineFactory factory = metaClient.getTableFormat().getTimelineFactory();
     // TODO: For Now, we will assume, only active-timeline will be transferred.
+    // TODO this may be loading an active timeline which we don't want since the instants are provided
     return factory.createDefaultTimeline(dto.instants.stream().map(d -> InstantDTO.toInstant(d, instantGenerator)),
         metaClient.getActiveTimeline());
   }
