@@ -369,7 +369,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
         // Field should definitely exist.
         eventTime = record.convertColumnValueForLogicalType(
             field.get().schema(), eventTime, keepConsistentLogicalTimestamp);
-        Map<String, String> metadata = recordMetadata.orElse(new HashMap<>());
+        Map<String, String> metadata = recordMetadata.orElseGet(HashMap::new);
         metadata.put(METADATA_EVENT_TIME_KEY, String.valueOf(eventTime));
         return Option.of(metadata);
       }

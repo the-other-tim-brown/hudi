@@ -292,7 +292,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   protected SparkRDDMetadataWriteClient getSparkWriteClient(Option<BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, JavaRDD<WriteStatus>>> writeClientOpt) {
-    return ((SparkRDDMetadataWriteClient) writeClientOpt.orElse(getWriteClient()));
+    return ((SparkRDDMetadataWriteClient) writeClientOpt.orElseGet(this::getWriteClient));
   }
 
   @Override

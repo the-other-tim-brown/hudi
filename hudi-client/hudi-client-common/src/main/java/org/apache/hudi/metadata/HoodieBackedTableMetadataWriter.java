@@ -873,7 +873,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       HoodieReaderContext<T> readerContext = readerContextFactory.getContext();
       Schema dataSchema = AvroSchemaCache.intern(HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(dataWriteConfig.getWriteSchema()), dataWriteConfig.allowOperationMetadataField()));
       Schema requestedSchema = metaClient.getTableConfig().populateMetaFields() ? getRecordKeySchema()
-          : HoodieAvroUtils.projectSchema(dataSchema, Arrays.asList(metaClient.getTableConfig().getRecordKeyFields().orElse(new String[0])));
+          : HoodieAvroUtils.projectSchema(dataSchema, Arrays.asList(metaClient.getTableConfig().getRecordKeyFields().orElseGet(() -> new String[0])));
       Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(dataWriteConfig.getInternalSchema());
       HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>newBuilder()
           .withReaderContext(readerContext)
@@ -2035,7 +2035,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         .filterInflightsAndRequested().filter(instant -> metadataCompletedTimeline.containsInstant(instant.requestedTime())).firstInstant()
         // minus the pending instant time by 1 millisecond to avoid conflicts on the MDT.
         .map(instant -> HoodieInstantTimeGenerator.instantTimeMinusMillis(instant.requestedTime(), 1L))
-        .orElse(writeClient.createNewInstantTime(false));
+        .orElseGet(() -> writeClient.createNewInstantTime(false));
 
     // we need to avoid checking compaction w/ same instant again.
     // let's say we trigger compaction after C5 in MDT and so compaction completes with C4001. but C5 crashed before completing in MDT.

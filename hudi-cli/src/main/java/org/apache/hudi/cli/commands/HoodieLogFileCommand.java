@@ -248,7 +248,7 @@ public class HoodieLogFileCommand {
           .withFileSlice(fileSlice)
           .withDataSchema(readerSchema)
           .withRequestedSchema(readerSchema)
-          .withLatestCommitTime(client.getActiveTimeline().getCommitAndReplaceTimeline().lastInstant().map(HoodieInstant::requestedTime).orElse(HoodieInstantTimeGenerator.getCurrentInstantTimeStr()))
+          .withLatestCommitTime(client.getActiveTimeline().getCommitAndReplaceTimeline().lastInstant().map(HoodieInstant::requestedTime).orElseGet(HoodieInstantTimeGenerator::getCurrentInstantTimeStr))
           .withProps(fileGroupReaderProperties)
           .withShouldUseRecordPosition(false)
           .build();
