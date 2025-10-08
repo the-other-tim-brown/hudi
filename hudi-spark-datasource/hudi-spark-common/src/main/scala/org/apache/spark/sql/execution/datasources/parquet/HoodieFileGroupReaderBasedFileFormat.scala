@@ -19,7 +19,7 @@ package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieSparkUtils, HoodieTableSchema, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.hudi.avro.AvroSchemaUtils
-import org.apache.hudi.cdc.{CDCFileGroupIterator, CDCRelation, HoodieCDCFileGroupSplit}
+import org.apache.hudi.cdc.{CDCFileGroupIterator, HoodieCDCFileGroupSplit, HoodieCDCFileIndex}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.config.{HoodieMemoryConfig, TypedProperties}
@@ -31,6 +31,7 @@ import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.common.util.collection.ClosableIterator
 import org.apache.hudi.data.CloseableIteratorListener
 import org.apache.hudi.exception.HoodieNotSupportedException
+import org.apache.hudi.incremental.HoodieTableSchema
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.io.IOUtils
 import org.apache.hudi.io.storage.HoodieSparkParquetReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR
@@ -327,7 +328,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     val fileSplits = hoodiePartitionCDCFileGroupSliceMapping.getFileSplits().toArray
     val cdcFileGroupSplit: HoodieCDCFileGroupSplit = HoodieCDCFileGroupSplit(fileSplits)
     props.setProperty(HoodieTableConfig.HOODIE_TABLE_NAME_KEY, tableName)
-    val cdcSchema = CDCRelation.FULL_CDC_SPARK_SCHEMA
+    val cdcSchema = HoodieCDCFileIndex.FULL_CDC_SPARK_SCHEMA
     new CDCFileGroupIterator(
       cdcFileGroupSplit,
       metaClient,

@@ -18,14 +18,16 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.HoodieBaseRelation.{convertToAvroSchema, isSchemaEvolutionEnabledOnRead}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
+import org.apache.hudi.cdc.HoodieCDCFileIndex
 import org.apache.hudi.common.config.HoodieReaderConfig
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
+import org.apache.hudi.incremental.{HoodieIncrementalFileIndex, HoodieTableSchema, MergeOnReadIncrementalRelation, MergeOnReadIncrementalRelationV1, MergeOnReadIncrementalRelationV2}
+import org.apache.hudi.incremental.HoodieBaseRelation.{convertToAvroSchema, isSchemaEvolutionEnabledOnRead}
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.convert.InternalSchemaConverter
 import org.apache.hudi.keygen.{CustomAvroKeyGenerator, CustomKeyGenerator, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
@@ -334,7 +336,7 @@ class HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV2(override val sqlCont
                                                             isBootstrap: Boolean,
                                                             rangeType: RangeType = RangeType.OPEN_CLOSED)
   extends HoodieMergeOnReadIncrementalHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap,
-    MergeOnReadIncrementalRelationV2(sqlContext, options, metaClient, schemaSpec, None, rangeType))
+    MergeOnReadIncrementalRelationV2(sqlContext, options, metaClient, schemaSpec, rangeType))
 
 class HoodieMergeOnReadCDCHadoopFsRelationFactory(override val sqlContext: SQLContext,
                                                   override val metaClient: HoodieTableMetaClient,
@@ -348,7 +350,7 @@ class HoodieMergeOnReadCDCHadoopFsRelationFactory(override val sqlContext: SQLCo
 
   override def buildFileIndex(): HoodieFileIndex = hoodieCDCFileIndex
 
-  override def buildDataSchema(): StructType = hoodieCDCFileIndex.cdcRelation.schema
+  override def buildDataSchema(): StructType = HoodieCDCFileIndex.FULL_CDC_SPARK_SCHEMA
 
   override def buildPartitionSchema(): StructType = StructType(Nil)
 
@@ -434,7 +436,7 @@ class HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV2(override val sqlCont
                                                             isBootstrap: Boolean,
                                                             rangeType: RangeType = RangeType.OPEN_CLOSED)
   extends HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap,
-    MergeOnReadIncrementalRelationV2(sqlContext, options, metaClient, schemaSpec, None, rangeType))
+    MergeOnReadIncrementalRelationV2(sqlContext, options, metaClient, schemaSpec, rangeType))
 
 class HoodieCopyOnWriteCDCHadoopFsRelationFactory(override val sqlContext: SQLContext,
                                                   override val metaClient: HoodieTableMetaClient,
@@ -448,7 +450,7 @@ class HoodieCopyOnWriteCDCHadoopFsRelationFactory(override val sqlContext: SQLCo
     sparkSession, metaClient, schemaSpec, options, fileStatusCache, false, rangeType)
   override def buildFileIndex(): HoodieFileIndex = hoodieCDCFileIndex
 
-  override def buildDataSchema(): StructType = hoodieCDCFileIndex.cdcRelation.schema
+  override def buildDataSchema(): StructType = HoodieCDCFileIndex.FULL_CDC_SPARK_SCHEMA
 
   override def buildPartitionSchema(): StructType = StructType(Nil)
 
