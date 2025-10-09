@@ -358,21 +358,10 @@ case class HoodieFileIndex(spark: SparkSession,
   }
 
   /**
-   * In the fast bootstrap read code path, it gets the path info for the bootstrap base file instead of
-   * skeleton file. Returns path info for the base file if available.
+   * Returns path info for the base file if available.
    */
   protected def getBaseFileInfo(baseFileOpt: Option[HoodieBaseFile]): Option[StoragePathInfo] = {
-    baseFileOpt.map(baseFile => {
-      if (shouldFastBootstrap) {
-        if (baseFile.getBootstrapBaseFile.isPresent) {
-          baseFile.getBootstrapBaseFile.get().getPathInfo
-        } else {
-          baseFile.getPathInfo
-        }
-      } else {
-        baseFile.getPathInfo
-      }
-    })
+    baseFileOpt.map(baseFile => baseFile.getPathInfo)
   }
 
   /**
