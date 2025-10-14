@@ -64,8 +64,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.Spliterator;
+import java.util.Spliterators;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 import static org.apache.hudi.common.util.CollectionUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
@@ -119,12 +122,11 @@ public class CloudObjectsSelectorCommon {
    */
   public static MapPartitionsFunction<Row, CloudObjectMetadata> getCloudObjectMetadataPerPartition(
       String storageUrlSchemePrefix, StorageConfiguration<Configuration> storageConf, boolean checkIfExists) {
-    return rows -> {
-      List<CloudObjectMetadata> cloudObjectMetadataPerPartition = new ArrayList<>();
-      rows.forEachRemaining(row -> {
+    return rows ->
+      StreamSupport.stream(Spliterators.spliteratorUnknownSize(rows, Spliterator.IMMUTABLE), true).map(row -> {
         Option<String> filePathUrl = getUrlForFile(row, storageUrlSchemePrefix, storageConf, checkIfExists);
-        filePathUrl.ifPresent(url -> {
-          LOG.info("Adding file: " + url);
+        return filePathUrl.map(url -> {
+          LOG.info("Adding file: {}", url);
           long size;
           Object obj = row.get(2);
           if (obj instanceof String) {
@@ -136,12 +138,9 @@ public class CloudObjectsSelectorCommon {
           } else {
             throw new HoodieIOException("unexpected object size's type in Cloud storage events: " + obj.getClass());
           }
-          cloudObjectMetadataPerPartition.add(new CloudObjectMetadata(url, size));
+          return new CloudObjectMetadata(url, size);
         });
-      });
-
-      return cloudObjectMetadataPerPartition.iterator();
-    };
+      }).filter(Option::isPresent).map(Option::get).iterator();
   }
 
   /**
