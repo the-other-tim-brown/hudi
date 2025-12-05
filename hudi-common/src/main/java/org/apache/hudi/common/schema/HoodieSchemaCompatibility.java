@@ -21,6 +21,8 @@ package org.apache.hudi.common.schema;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 
+import org.apache.avro.SchemaCompatibility;
+
 import java.util.Collections;
 import java.util.Set;
 
@@ -41,6 +43,10 @@ public final class HoodieSchemaCompatibility {
 
   // Prevent instantiation
   private HoodieSchemaCompatibility() {
+  }
+
+  public static boolean areSchemasCompatible(HoodieSchema tableSchema, HoodieSchema writerSchema) {
+    return SchemaCompatibility.checkReaderWriterCompatibility(tableSchema.toAvroSchema(), writerSchema.toAvroSchema()).getType() == SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE;
   }
 
   /**
