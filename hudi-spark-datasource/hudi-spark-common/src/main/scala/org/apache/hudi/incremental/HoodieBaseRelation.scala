@@ -20,7 +20,6 @@
 package org.apache.hudi.incremental
 
 import org.apache.hudi.{AvroConversionUtils, DataSourceOptionsHelper, DataSourceReadOptions, HoodieFileIndex, HoodieSparkUtils, SparkAdapterSupport}
-import org.apache.hudi.AvroConversionUtils.getAvroSchemaWithDefaults
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
@@ -35,7 +34,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath
 import org.apache.hudi.incremental.HoodieBaseRelation.{convertToAvroSchema, isSchemaEvolutionEnabledOnRead, metaFieldNames}
 import org.apache.hudi.internal.schema.InternalSchema
-import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
+import org.apache.hudi.internal.schema.convert.InternalSchemaConverter
 import org.apache.hudi.storage.StoragePathInfo
 
 import org.apache.avro.Schema
@@ -130,7 +129,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
     val (name, namespace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tableName)
     val avroSchema = internalSchemaOpt.map { is =>
-      AvroInternalSchemaConverter.convert(is, namespace + "." + name)
+      InternalSchemaConverter.convert(is, namespace + "." + name).toAvroSchema()
     } orElse {
       specifiedQueryTimestamp.map(schemaResolver.getTableAvroSchema)
     } orElse {
@@ -267,8 +266,7 @@ object HoodieBaseRelation extends SparkAdapterSupport {
 
   def convertToAvroSchema(structSchema: StructType, tableName: String ): Schema = {
     val (recordName, namespace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tableName)
-    val avroSchema = sparkAdapter.getAvroSchemaConverters.toAvroType(structSchema, nullable = false, recordName, namespace)
-    getAvroSchemaWithDefaults(avroSchema, structSchema)
+    sparkAdapter.getAvroSchemaConverters.toAvroType(structSchema, nullable = false, recordName, namespace)
   }
 
   def getPartitionPath(fileStatus: FileStatus): Path =

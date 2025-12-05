@@ -29,6 +29,7 @@ import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
+import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.internal.schema.Types.RecordType
 import org.apache.hudi.internal.schema.utils.Conversions
@@ -114,6 +115,8 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   private lazy val rawStructSchema: StructType = schemaSpec.getOrElse {
     AvroConversionUtils.convertAvroSchemaToStructType(rawHoodieSchema.toAvroSchema)
   }
+
+  protected lazy val shouldFastBootstrap = configProperties.getBoolean(DATA_QUERIES_ONLY.key, false)
 
   /**
    * Get the partition schema from the hoodie.properties.
