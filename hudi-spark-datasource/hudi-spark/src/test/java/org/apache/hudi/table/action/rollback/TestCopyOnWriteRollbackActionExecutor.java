@@ -47,7 +47,6 @@ import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.api.java.JavaRDD;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -86,11 +85,6 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     initSparkContexts();
     initHoodieStorage();
     initMetaClient();
-  }
-
-  @AfterEach
-  public void tearDown() throws Exception {
-    cleanupResources();
   }
 
   @Test
