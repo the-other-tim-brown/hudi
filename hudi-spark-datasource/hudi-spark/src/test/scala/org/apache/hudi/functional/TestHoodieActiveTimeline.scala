@@ -29,7 +29,7 @@ import org.apache.hudi.exception.HoodieIOException
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
 import org.apache.spark.sql._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, Assertions, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue, fail}
 
 import java.io.FileNotFoundException
@@ -244,15 +244,11 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
       .save(basePath)
     val metaClient: HoodieTableMetaClient = createMetaClient(basePath)
     val activeTimeline = metaClient.getActiveTimeline
-    try {
-      activeTimeline.getInstantContentStream(HoodieTestUtils.INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT,
-        HoodieTimeline.CLUSTERING_ACTION, WriteClientTestUtils.createNewInstantTime()))
-    } catch {
-      // org.apache.hudi.common.util.ClusteringUtils.getRequestedReplaceMetadata depends upon this behaviour
-      // where FileNotFoundException is the cause of exception thrown by the API getInstantDetails
-      case e: HoodieIOException => assertTrue(classOf[FileNotFoundException].equals(e.getCause.getClass))
-      case _ => fail("Should have failed with FileNotFoundException")
-    }
+    val exception = Assertions.assertThrows(classOf[HoodieIOException], () => {
+      activeTimeline.getInstantDetails(HoodieTestUtils.INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT,
+        HoodieTimeline.COMMIT_ACTION, WriteClientTestUtils.createNewInstantTime()))
+    })
+    assertTrue(classOf[FileNotFoundException].equals(exception.getCause.getClass))
   }
 
   @Test

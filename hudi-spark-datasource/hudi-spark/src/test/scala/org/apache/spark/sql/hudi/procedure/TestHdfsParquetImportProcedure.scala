@@ -149,16 +149,14 @@ class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {
     for (recordNum <- 96 until 100) {
       records.add(dataGen.generateGenericRecord(recordNum.toString, "0", "rider-upsert-" + recordNum, "driver-upsert" + recordNum, startTime + TimeUnit.HOURS.toSeconds(recordNum)))
     }
+    val writer = AvroParquetWriter.builder[GenericRecord](srcFile).withSchema(HoodieTestDataGenerator.AVRO_SCHEMA)
+      .withConf(HoodieTestUtils.getDefaultStorageConf.unwrap()).build
     try {
-      val writer = AvroParquetWriter.builder[GenericRecord](srcFile).withSchema(HoodieTestDataGenerator.AVRO_SCHEMA)
-        .withConf(HoodieTestUtils.getDefaultStorageConf.unwrap()).build
-      try {
-        for (record <- records.asScala) {
-          writer.write(record)
-        }
-      } finally {
-        if (writer != null) writer.close()
+      for (record <- records.asScala) {
+        writer.write(record)
       }
+    } finally {
+      if (writer != null) writer.close()
     }
     records
   }

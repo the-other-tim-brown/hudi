@@ -193,6 +193,7 @@ class IncrementalRelationV2(val sqlContext: SQLContext,
       val formatClassName = metaClient.getTableConfig.getBaseFileFormat match {
         case HoodieFileFormat.PARQUET => LegacyHoodieParquetFileFormat.FILE_FORMAT_ID
         case HoodieFileFormat.ORC => "orc"
+        case _ => throw new UnsupportedOperationException(s"Unsupported file format: ${metaClient.getTableConfig.getBaseFileFormat}")
       }
 
       // Fallback to full table scan if any of the following conditions matches:

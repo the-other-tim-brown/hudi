@@ -102,8 +102,8 @@ class ShowFileStatusProcedure extends BaseProcedure
       }
       fs.listStatus(path).toList
         .find(f => f.getPath.getName.equals(fileName.get))
-        .map(f => Seq(Row(FileStatus.EXIST.toString, DEFAULT_VALUE, DEFAULT_VALUE, TimelineType.ACTIVE.toString, f.getPath.toUri.getPath)))
-        .getOrElse(Seq(Row(FileStatus.UNKNOWN.toString, DEFAULT_VALUE, DEFAULT_VALUE, DEFAULT_VALUE, DEFAULT_VALUE)))
+        .map(f => Seq(Row(HoodieFileStatus.EXIST.toString, DEFAULT_VALUE, DEFAULT_VALUE, TimelineType.ACTIVE.toString, f.getPath.toUri.getPath)))
+        .getOrElse(Seq(Row(HoodieFileStatus.UNKNOWN.toString, DEFAULT_VALUE, DEFAULT_VALUE, DEFAULT_VALUE, DEFAULT_VALUE)))
     }
     applyFilter(results, filter, outputType)
   }
@@ -145,7 +145,7 @@ class ShowFileStatusProcedure extends BaseProcedure
       }
     }.map(restoreInstant =>
       FileStatusInfo(
-        FileStatus.DELETED.toString,
+        HoodieFileStatus.DELETED.toString,
         HoodieTimeline.RESTORE_ACTION,
         restoreInstant.requestedTime,
         TimelineType.ACTIVE.toString,
@@ -205,9 +205,9 @@ class ShowFileStatusProcedure extends BaseProcedure
   private def getResult(timeline: HoodieTimeline, action: String, timestamp: String): Option[FileStatusInfo] = {
     timeline match {
       case _: HoodieActiveTimeline =>
-        Option.apply(FileStatusInfo(FileStatus.DELETED.toString, action, timestamp, TimelineType.ACTIVE.toString, DEFAULT_VALUE))
+        Option.apply(FileStatusInfo(HoodieFileStatus.DELETED.toString, action, timestamp, TimelineType.ACTIVE.toString, DEFAULT_VALUE))
       case _: HoodieArchivedTimeline =>
-        Option.apply(FileStatusInfo(FileStatus.DELETED.toString, action, timestamp, TimelineType.ARCHIVED.toString, DEFAULT_VALUE))
+        Option.apply(FileStatusInfo(HoodieFileStatus.DELETED.toString, action, timestamp, TimelineType.ARCHIVED.toString, DEFAULT_VALUE))
       case _ => throw new HoodieException("Unsupported timeline type: " + timeline.getClass);
     }
   }
@@ -230,12 +230,12 @@ object ShowFileStatusProcedure {
   }
 }
 
-object FileStatus extends Enumeration {
+object HoodieFileStatus extends Enumeration {
   type FileStatus = Value
 
-  val DELETED: procedures.FileStatus.Value = Value("deleted")
-  val EXIST: procedures.FileStatus.Value = Value("exist")
-  val UNKNOWN: procedures.FileStatus.Value = Value("unknown")
+  val DELETED: procedures.HoodieFileStatus.Value = Value("deleted")
+  val EXIST: procedures.HoodieFileStatus.Value = Value("exist")
+  val UNKNOWN: procedures.HoodieFileStatus.Value = Value("unknown")
 }
 
 object TimelineType extends Enumeration {

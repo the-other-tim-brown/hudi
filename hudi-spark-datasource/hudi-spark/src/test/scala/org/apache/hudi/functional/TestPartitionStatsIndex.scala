@@ -241,7 +241,6 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
           true
         } catch {
           case _: HoodieWriteConflictException => false
-          case e => throw new Exception("Multi write failed", e)
         }
       }
     }

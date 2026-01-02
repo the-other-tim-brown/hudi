@@ -20,7 +20,6 @@ package org.apache.spark.sql.catalyst.plans.logical
 import org.apache.hudi.DataSourceReadOptions
 
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
-import org.apache.spark.sql.catalyst.plans.logical.LeafNode
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 
 object HoodieTimelineTableValuedFunctionOptionsParser {

@@ -24,10 +24,6 @@ import org.mockito.Mockito.{mock, when}
 
 class TestHoodieCommandMetrics extends HoodieSparkSqlTestBase {
 
-  override def beforeAll(): Unit = {
-    spark.sparkContext
-  }
-
   test("test HoodieCommandMetrics metrics") {
     val metrics = HoodieCommandMetrics.metrics
     assert(metrics != null)

@@ -83,7 +83,6 @@ class DefaultSource extends RelationProvider
       }
     } catch {
       case _: HoodieSchemaNotFoundException => new EmptyRelation(sqlContext, new StructType())
-      case e => throw e
     }
   }
 

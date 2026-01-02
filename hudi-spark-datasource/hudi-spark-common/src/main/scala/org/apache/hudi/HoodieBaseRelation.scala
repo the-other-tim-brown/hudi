@@ -246,6 +246,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
         // when these corresponding partition-values are not persisted w/in the data file itself
         val parquetFileFormat = sparkAdapter.createLegacyHoodieParquetFileFormat(shouldExtractPartitionValuesFromPartitionPath).get
         (parquetFileFormat, LegacyHoodieParquetFileFormat.FILE_FORMAT_ID)
+      case _ => throw new UnsupportedOperationException(s"Unsupported file format: ${metaClient.getTableConfig.getBaseFileFormat}")
     }
 
   /**

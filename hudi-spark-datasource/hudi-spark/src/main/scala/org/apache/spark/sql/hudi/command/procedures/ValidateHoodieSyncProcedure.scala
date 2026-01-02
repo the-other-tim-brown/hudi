@@ -170,22 +170,20 @@ class ValidateHoodieSyncProcedure extends BaseProcedure with ProcedureBuilder wi
   @throws[SQLException]
   private def countRecords(jdbcUrl: String, source: HoodieTableMetaClient, srcDb: String, startDateStr: String, endDateStr: String, user: String, pass: String): Long = {
     var rs: ResultSet = null
-    try {
-      val conn = DriverManager.getConnection(jdbcUrl, user, pass)
-      val stmt = conn.createStatement
-      try { // stmt.execute("set mapred.job.queue.name=<queue_name>");
-        stmt.execute("set hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat")
-        stmt.execute("set hive.stats.autogather=false")
-        rs = stmt.executeQuery(s"select count(`_hoodie_commit_time`) as cnt from $srcDb.${source.getTableConfig.getTableName} where datestr>'$startDateStr' and datestr<='$endDateStr'")
-        if (rs.next)
-          rs.getLong("cnt")
-        else
-          -1
-      } finally {
-        if (rs != null) rs.close()
-        if (conn != null) conn.close()
-        if (stmt != null) stmt.close()
-      }
+    val conn = DriverManager.getConnection(jdbcUrl, user, pass)
+    val stmt = conn.createStatement
+    try { // stmt.execute("set mapred.job.queue.name=<queue_name>");
+      stmt.execute("set hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat")
+      stmt.execute("set hive.stats.autogather=false")
+      rs = stmt.executeQuery(s"select count(`_hoodie_commit_time`) as cnt from $srcDb.${source.getTableConfig.getTableName} where datestr>'$startDateStr' and datestr<='$endDateStr'")
+      if (rs.next)
+        rs.getLong("cnt")
+      else
+        -1
+    } finally {
+      if (rs != null) rs.close()
+      if (conn != null) conn.close()
+      if (stmt != null) stmt.close()
     }
   }
 

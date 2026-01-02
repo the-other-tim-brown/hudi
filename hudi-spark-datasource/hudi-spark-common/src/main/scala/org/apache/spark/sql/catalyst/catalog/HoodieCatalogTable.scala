@@ -274,6 +274,8 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
       case (CatalogTableType.MANAGED, true) =>
         throw new HoodieAnalysisException(s"Can not create the managed table('$catalogTableName')" +
           s". The associated location('$tableLocation') already exists.")
+      case _ =>
+        throw new HoodieAnalysisException(s"Unsupported table configuration: tableType=${table.tableType}, exists=$hoodieTableExists")
     }
     HoodieOptionConfig.validateTable(spark, finalSchema,
       mapHoodieConfigsToSqlOptions(tableConfigs))

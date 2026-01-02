@@ -19,14 +19,12 @@
 package org.apache.spark.sql.hudi.common
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.data.{HoodiePairData}
+import org.apache.hudi.common.data.HoodiePairData
 import org.apache.hudi.common.util.HoodieDataUtils
 import org.apache.hudi.common.util.collection.Pair
 import org.apache.hudi.data.HoodieJavaPairRDD
 
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.SQLContext
-import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 import scala.collection.JavaConverters._
 

@@ -209,6 +209,7 @@ class TestShowTimelineTableProcedure extends HoodieSparkSqlTestBase {
           case _ =>
             activeTimeline.createNewInstant(requestedInstant)
         }
+      case _ => throw new IllegalArgumentException(s"Unsupported instant state: $state")
     }
   }
 
@@ -335,6 +336,7 @@ class TestShowTimelineTableProcedure extends HoodieSparkSqlTestBase {
           case _ =>
             activeTimeline.createNewInstant(requestedInstant)
         }
+      case _ => throw new IllegalArgumentException(s"Unsupported instant state: $state")
     }
   }
 

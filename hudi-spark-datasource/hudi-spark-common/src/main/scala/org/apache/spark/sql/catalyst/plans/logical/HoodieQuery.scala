@@ -20,7 +20,6 @@ package org.apache.spark.sql.catalyst.plans.logical
 import org.apache.hudi.common.util.ValidationUtils.checkState
 
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
-import org.apache.spark.sql.catalyst.plans.logical.LeafNode
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 
 case class HoodieQuery(args: Seq[Expression]) extends LeafNode {

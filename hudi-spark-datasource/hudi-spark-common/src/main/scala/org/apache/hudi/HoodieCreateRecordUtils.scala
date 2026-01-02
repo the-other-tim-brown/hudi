@@ -201,6 +201,8 @@ object HoodieCreateRecordUtils {
             hoodieSparkRecord
           }
         }.toJavaRDD().asInstanceOf[JavaRDD[HoodieRecord[_]]]
+      case _ =>
+        throw new UnsupportedOperationException(s"Unsupported record type: $recordType")
     }
   }
 
