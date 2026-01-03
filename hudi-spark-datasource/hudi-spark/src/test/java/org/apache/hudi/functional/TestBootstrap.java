@@ -83,6 +83,7 @@ import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.api.java.UDF1;
 import org.apache.spark.sql.types.DataTypes;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
@@ -144,6 +145,13 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
     initMetaClient();
     // initialize parquet input format
     reloadInputFormats();
+  }
+
+  @AfterEach
+  public void tearDown() throws IOException {
+    cleanupSparkContexts();
+    cleanupClients();
+    cleanupTestDataGenerator();
   }
 
   private void reloadInputFormats() {
