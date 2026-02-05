@@ -164,6 +164,8 @@ public class HoodieSchema implements Serializable {
         return new HoodieSchema.Timestamp(avroSchema);
       } else if (logicalType == VariantLogicalType.variant()) {
         return new HoodieSchema.Variant(avroSchema);
+      } else if (logicalType == BlobLogicalType.blob()) {
+        return new HoodieSchema.Blob(avroSchema);
       }
     }
     return new HoodieSchema(avroSchema);
@@ -1951,9 +1953,18 @@ public class HoodieSchema implements Serializable {
       super(createSchema(name));
     }
 
+    private Blob(Schema avroSchema) {
+      super(avroSchema);
+    }
+
     @Override
     public String getName() {
       return "blob";
+    }
+
+    @Override
+    public HoodieSchemaType getType() {
+      return HoodieSchemaType.BLOB;
     }
 
     private static Schema createSchema(String name) {
