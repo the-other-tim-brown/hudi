@@ -29,7 +29,7 @@ import java.util.Objects;
 public class CleanFileInfo implements Serializable {
 
   private final String filePath;
-  private final boolean isBootstrapBaseFile;
+  private final boolean isBootstrapBaseFile; // TODO: convert this to some enum so it covers blob files as well?
 
   public CleanFileInfo(String filePath, boolean isBootstrapBaseFile) {
     this.filePath = filePath;
