@@ -25,6 +25,8 @@ import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.CleanFileInfo;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -126,6 +128,8 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
       Map<String, List<HoodieCleanFileInfo>> cleanOps = new HashMap<>();
       List<String> partitionsToDelete = new ArrayList<>();
       boolean shouldUseBatchLookup = table.getMetaClient().getTableConfig().isMetadataTableAvailable();
+      TableSchemaResolver schemaResolver = new TableSchemaResolver(table.getMetaClient());
+      HoodieSchema schema = schemaResolver.getTableSchema();
       for (int i = 0; i < partitionsToClean.size(); i += cleanerParallelism) {
         // Handles at most 'cleanerParallelism' number of partitions once at a time to avoid overlarge memory pressure to the timeline server
         // (remote or local embedded), thus to reduce the risk of an OOM exception.
@@ -135,7 +139,7 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
           table.getHoodieView().loadPartitions(subPartitionsToClean);
         }
         Map<String, Pair<Boolean, List<CleanFileInfo>>> cleanOpsWithPartitionMeta = context
-            .map(subPartitionsToClean, partitionPathToClean -> Pair.of(partitionPathToClean, planner.getDeletePaths(partitionPathToClean, earliestInstant)), cleanerParallelism)
+            .map(subPartitionsToClean, partitionPathToClean -> Pair.of(partitionPathToClean, planner.getDeletePaths(partitionPathToClean, earliestInstant, schema)), cleanerParallelism)
             .stream()
             .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
@@ -159,6 +163,8 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
           prepareExtraMetadata(planner.getSavepointedTimestamps()));
     } catch (IOException e) {
       throw new HoodieIOException("Failed to schedule clean operation", e);
+    } catch (Exception e) {
+      throw new HoodieException("Failed to schedule clean operation", e);
     }
   }
 
