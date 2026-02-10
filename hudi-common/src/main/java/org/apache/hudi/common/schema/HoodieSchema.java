@@ -932,10 +932,11 @@ public class HoodieSchema implements Serializable {
     }
 
     List<HoodieSchema> types = getTypes();
-    if (types.size() != 2) {
-      throw new IllegalStateException("Union schema has more than two types");
+    if (types.size() == 2) {
+      return types.get(0).getType() != HoodieSchemaType.NULL ? types.get(0) : types.get(1);
+    } else {
+      return HoodieSchema.createUnion(types.stream().filter(type -> type.getType() != HoodieSchemaType.NULL).collect(Collectors.toList()));
     }
-    return types.get(0).getType() != HoodieSchemaType.NULL ? types.get(0) : types.get(1);
   }
 
   public boolean isBlobType() {
