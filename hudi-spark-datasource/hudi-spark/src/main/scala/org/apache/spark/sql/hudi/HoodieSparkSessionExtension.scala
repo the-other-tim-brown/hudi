@@ -21,6 +21,7 @@ import org.apache.hudi.SparkAdapterSupport
 
 import org.apache.spark.sql.SparkSessionExtensions
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis
+import org.apache.spark.sql.hudi.blob.BatchedBlobReadStrategy
 import org.apache.spark.sql.parser.HoodieCommonSqlParser
 
 /**
@@ -51,6 +52,9 @@ class HoodieSparkSessionExtension extends (SparkSessionExtensions => Unit)
       extensions.injectPreCBORule(ruleBuilder(_))
     }
     */
+
+    // Inject planner strategy for BatchedBlobRead
+    extensions.injectPlannerStrategy(_ => BatchedBlobReadStrategy)
 
     sparkAdapter.injectTableFunctions(extensions)
     sparkAdapter.injectScalarFunctions(extensions)
