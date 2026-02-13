@@ -1943,6 +1943,14 @@ public class HoodieSchema implements Serializable {
 
     public static final String HUDI_BLOB = "hudi_blob";
 
+    public static int getBlobReferenceFieldCount() {
+      return 4;
+    }
+
+    public static int getBlobFieldCount() {
+      return 3;
+    }
+
     /**
      * Creates a new HoodieSchema wrapping the given Avro schema.
      *
