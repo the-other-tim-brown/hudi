@@ -554,6 +554,64 @@
                 }
             ],
             "default" : null
+        },
+        {
+            "name": "vectorIndexMetadata",
+            "doc": "Metadata Index that contains information tracking the vector index state",
+            "type": [
+                "null",
+                {
+                    "type": "record",
+                    "name": "HoodieVectorIndexInfo",
+                    "fields": [
+                        {
+                            "name": "shardKey",
+                            "type": "string",
+                            "doc": "The vector index is broken into multiple shards, this key is used to identify a particular shard."
+                        },
+                        {
+                            "name": "checkpoint",
+                            "type": "string",
+                            "doc": "The checkpoint of the vector index. This information is used to load the vector index from the correct file or remote system."
+                        },
+                        {
+                            "name": "members",
+                            "type": {
+                                "type": "array",
+                                "items": {
+                                    "type": "record",
+                                    "name": "HoodieVectorIndexMemberInfo",
+                                    "fields": [
+                                        {
+                                            "name": "fileId",
+                                            "type": "string",
+                                            "doc": "The fileId of the data file included in this shard."
+                                        },
+                                        {
+                                            "name": "partition",
+                                            "type": "string",
+                                            "doc": "The partition of the data file."
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                          "name": "metadata",
+                          "type": [
+                              "null",
+                              {
+                                  "type": "map",
+                                  "values": "string"
+                              }
+                          ],
+                          "default": null,
+                          "doc": "Additional metadata information for the vector index shard."
+                        }
+                    ]
+                }
+            ],
+            "default" : null
         }
     ]
 }

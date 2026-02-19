@@ -39,6 +39,7 @@ import org.apache.hudi.expression.BindVisitor;
 import org.apache.hudi.expression.Expression;
 import org.apache.hudi.expression.PartialBindVisitor;
 import org.apache.hudi.expression.Predicates;
+import org.apache.hudi.index.vector.VectorIndex;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -361,5 +362,10 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
       }
     }
     return pathInfoMap;
+  }
+
+  @Override
+  public VectorIndex getVectorIndex(String indexName, String shardKey) {
+    throw new HoodieMetadataException("Unsupported operation: getVectorIndex");
   }
 }

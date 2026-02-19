@@ -192,6 +192,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP
 import static org.apache.hudi.metadata.MetadataPartitionType.fromPartitionPath;
 import static org.apache.hudi.metadata.MetadataPartitionType.isNewExpressionIndexDefinitionRequired;
 import static org.apache.hudi.metadata.MetadataPartitionType.isNewSecondaryIndexDefinitionRequired;
+import static org.apache.hudi.metadata.MetadataPartitionType.isNewVectorIndexDefinitionRequired;
 import static org.apache.hudi.stats.ValueMetadata.getValueMetadata;
 
 /**
@@ -210,6 +211,8 @@ public class HoodieTableMetadataUtil {
   public static final String PARTITION_NAME_EXPRESSION_INDEX_PREFIX = "expr_index_";
   public static final String PARTITION_NAME_SECONDARY_INDEX = "secondary_index";
   public static final String PARTITION_NAME_SECONDARY_INDEX_PREFIX = "secondary_index_";
+  public static final String PARTITION_NAME_VECTOR_INDEX = "vector_index";
+  public static final String PARTITION_NAME_VECTOR_INDEX_PREFIX = "vector_index_";
 
   public static final Set<String> SUPPORTED_META_FIELDS_PARTITION_STATS = new HashSet<>(Arrays.asList(
       HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName(),
@@ -2972,6 +2975,19 @@ public class HoodieTableMetadataUtil {
         metadataConfig::getSecondaryIndexName,
         PARTITION_NAME_SECONDARY_INDEX_PREFIX,
         PARTITION_NAME_SECONDARY_INDEX
+    );
+  }
+
+  public static Set<String> getVectorIndexPartitionsToInit(MetadataPartitionType partitionType, HoodieMetadataConfig metadataConfig, HoodieTableMetaClient dataMetaClient) {
+    return getIndexPartitionsToInit(
+        partitionType,
+        metadataConfig,
+        dataMetaClient,
+        () -> isNewVectorIndexDefinitionRequired(metadataConfig, dataMetaClient),
+        metadataConfig::getSecondaryIndexColumn,
+        metadataConfig::getSecondaryIndexName,
+        PARTITION_NAME_VECTOR_INDEX_PREFIX,
+        PARTITION_NAME_VECTOR_INDEX
     );
   }
 

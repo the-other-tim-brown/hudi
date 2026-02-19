@@ -20,6 +20,7 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
+import org.apache.hudi.avro.model.HoodieVectorIndexInfo;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
@@ -66,6 +67,8 @@ import org.apache.hudi.expression.Expression;
 import org.apache.hudi.expression.Literal;
 import org.apache.hudi.expression.Predicate;
 import org.apache.hudi.expression.Predicates;
+import org.apache.hudi.index.vector.DefaultVectorIndexFactory;
+import org.apache.hudi.index.vector.VectorIndex;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
@@ -846,5 +849,15 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     HoodieData<SecondaryIndexPrefixRawKey> rawKeys = secondaryKeys.map(SecondaryIndexPrefixRawKey::new);
     return readIndexRecords(rawKeys, partitionName, Option.empty())
         .mapToPair(hoodieRecord -> SecondaryIndexKeyUtils.getSecondaryKeyRecordKeyPair(hoodieRecord.getRecordKey()));
+  }
+
+  @Override
+  public VectorIndex getVectorIndex(String indexName, String shardKey) {
+    List<HoodieMetadataPayload> results = readIndexRecords(HoodieListData.eager(Collections.singletonList(new VectorIndexRawKey(shardKey))), indexName, Option.empty())
+        .map(HoodieRecord::getData)
+        .collectAsList();
+    HoodieVectorIndexInfo vectorIndexInfo = results.isEmpty() ? null : results.get(0).getVectorIndexMetadata();
+    // TODO make factory pluggable
+    return new DefaultVectorIndexFactory().createVectorIndex(vectorIndexInfo, shardKey, metadataMetaClient.getBasePath());
   }
 }

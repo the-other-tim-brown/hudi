@@ -23,6 +23,8 @@ import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
 import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
 import org.apache.hudi.avro.model.HoodieSecondaryIndexInfo;
+import org.apache.hudi.avro.model.HoodieVectorIndexInfo;
+import org.apache.hudi.avro.model.HoodieVectorIndexMemberInfo;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
@@ -76,11 +78,13 @@ import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_ID_BLO
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_ID_RECORD_INDEX;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_ID_SECONDARY_INDEX;
+import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_ID_VECTOR_INDEX;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_NAME_METADATA;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_FIELD_IS_DELETED;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_VECTOR_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.combineFileSystemMetadata;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.mergeColumnStatsRecords;
 
@@ -274,6 +278,36 @@ public enum MetadataPartitionType {
     @Override
     public HoodieMetadataPayload combineMetadataPayloads(HoodieMetadataPayload older, HoodieMetadataPayload newer) {
       return new HoodieMetadataPayload(newer.key, newer.type, combineFileSystemMetadata(older, newer));
+    }
+  },
+  VECTOR_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_VECTOR_INDEX_PREFIX, "vector-index-", 8) {
+    @Override
+    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig, HoodieTableConfig tableConfig) {
+      return metadataConfig.isVectorIndexEnabled();
+    }
+
+    @Override
+    public boolean isMetadataPartitionAvailable(HoodieTableMetaClient metaClient) {
+      if (metaClient.getIndexMetadata().isPresent()) {
+        return metaClient.getIndexMetadata().get().getIndexDefinitions().values().stream()
+            .anyMatch(indexDef -> indexDef.getIndexName().startsWith(HoodieTableMetadataUtil.PARTITION_NAME_VECTOR_INDEX_PREFIX));
+      }
+      return false;
+    }
+
+    @Override
+    public void constructMetadataPayload(HoodieMetadataPayload payload, GenericRecord record) {
+      GenericRecord vectorIndexRecord = getNestedFieldValue(record, SCHEMA_FIELD_ID_VECTOR_INDEX);
+      checkState(vectorIndexRecord != null, "Valid SecondaryIndexMetadata record expected for type: " + MetadataPartitionType.SECONDARY_INDEX.getRecordType());
+      payload.vectorIndexMetadata = new HoodieVectorIndexInfo(vectorIndexRecord.get(0).toString(), vectorIndexRecord.get(1).toString(),
+          (List<HoodieVectorIndexMemberInfo>) vectorIndexRecord.get(2), (Map<String, String>) vectorIndexRecord.get(3));
+    }
+
+    @Override
+    public String getPartitionPath(HoodieTableMetaClient metaClient, String indexName) {
+      return metaClient.getIndexForMetadataPartition(indexName)
+          .map(HoodieIndexDefinition::getIndexName)
+          .orElseThrow(() -> new IllegalArgumentException("Index definition is not present for index: " + indexName));
     }
   };
 
@@ -496,6 +530,16 @@ public enum MetadataPartitionType {
     }
     // check the index definition already exists or not for this column
     List<HoodieIndexDefinition> indexDefinitions = getIndexDefinitions(secondaryIndexColumn, PARTITION_NAME_SECONDARY_INDEX, dataMetaClient);
+    return indexDefinitions.isEmpty();
+  }
+
+  public static boolean isNewVectorIndexDefinitionRequired(HoodieMetadataConfig metadataConfig, HoodieTableMetaClient dataMetaClient) {
+    String secondaryIndexColumn = metadataConfig.getSecondaryIndexColumn();
+    if (StringUtils.isNullOrEmpty(secondaryIndexColumn)) {
+      return false;
+    }
+    // check the index definition already exists or not for this column
+    List<HoodieIndexDefinition> indexDefinitions = getIndexDefinitions(secondaryIndexColumn, PARTITION_NAME_VECTOR_INDEX, dataMetaClient);
     return indexDefinitions.isEmpty();
   }
 

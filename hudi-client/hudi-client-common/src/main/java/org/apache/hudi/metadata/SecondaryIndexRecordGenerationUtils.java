@@ -18,6 +18,8 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.avro.model.HoodieVectorIndexInfo;
+import org.apache.hudi.avro.model.HoodieVectorIndexMemberInfo;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
@@ -27,9 +29,12 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -50,6 +55,10 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.index.vector.DefaultVectorIndexShardManager;
+import org.apache.hudi.index.vector.VectorIndex;
+import org.apache.hudi.index.vector.VectorIndexShardManager;
+import org.apache.hudi.index.vector.VectorIndexUpdate;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -204,6 +213,151 @@ public class SecondaryIndexRecordGenerationUtils {
     return HoodieTableMetadataUtil.reduceByKeys(secondaryIndexRecords, parallelism, false);
   }
 
+  @VisibleForTesting
+  public static <T> HoodieData<HoodieRecord> convertWriteStatsToVectorIndexRecords(List<HoodieWriteStat> allWriteStats,
+                                                                                   String instantTime,
+                                                                                   HoodieIndexDefinition indexDefinition,
+                                                                                   HoodieMetadataConfig metadataConfig,
+                                                                                   HoodieTableMetaClient dataMetaClient,
+                                                                                   HoodieEngineContext engineContext,
+                                                                                   HoodieWriteConfig writeConfig) {
+    TypedProperties props = writeConfig.getProps();
+    // Secondary index cannot support logs having inserts with current offering. So, lets validate that.
+    if (allWriteStats.stream().anyMatch(writeStat -> {
+      String fileName = FSUtils.getFileName(writeStat.getPath(), writeStat.getPartitionPath());
+      return FSUtils.isLogFile(fileName) && writeStat.getNumInserts() > 0;
+    })) {
+      throw new HoodieIOException("Secondary index cannot support logs having inserts with current offering. Please disable secondary index.");
+    }
+
+    HoodieSchema tableSchema;
+    try {
+      tableSchema = tryResolveSchemaForTable(dataMetaClient).get();
+    } catch (Exception e) {
+      throw new HoodieException("Failed to get latest schema for " + dataMetaClient.getBasePath(), e);
+    }
+    Map<String, List<HoodieWriteStat>> writeStatsByFileId = allWriteStats.stream().collect(Collectors.groupingBy(HoodieWriteStat::getFileId));
+    int parallelism = Math.max(Math.min(writeStatsByFileId.size(), metadataConfig.getSecondaryIndexParallelism()), 1);
+
+    ReaderContextFactory<T> readerContextFactory = engineContext.getReaderContextFactory(dataMetaClient);
+    HoodieData<VectorIndexUpdate> vectorIndexUpdates = engineContext.parallelize(new ArrayList<>(writeStatsByFileId.entrySet()), parallelism).flatMap(writeStatsByFileIdEntry -> {
+      String fileId = writeStatsByFileIdEntry.getKey();
+      List<HoodieWriteStat> writeStats = writeStatsByFileIdEntry.getValue();
+      String partition = writeStats.get(0).getPartitionPath();
+      StoragePath basePath = dataMetaClient.getBasePath();
+
+      // validate that for a given fileId, either we have 1 parquet file or N log files.
+      AtomicInteger totalParquetFiles = new AtomicInteger();
+      AtomicInteger totalLogFiles = new AtomicInteger();
+      writeStats.forEach(writeStat -> {
+        if (FSUtils.isLogFile(new StoragePath(basePath, writeStat.getPath()))) {
+          totalLogFiles.getAndIncrement();
+        } else {
+          totalParquetFiles.getAndIncrement();
+        }
+      });
+
+      ValidationUtils.checkArgument(!(totalParquetFiles.get() > 0 && totalLogFiles.get() > 0), "Only either of base file or log files are expected for a given file group. "
+          + "Partition " + partition + ", fileId " + fileId);
+      if (totalParquetFiles.get() > 0) {
+        // we should expect only 1 parquet file
+        ValidationUtils.checkArgument(writeStats.size() == 1, "Only one new parquet file expected per file group per commit");
+      }
+      // Instantiate Remote table FSV
+      TableFileSystemView.SliceView sliceView = getSliceView(writeConfig,  dataMetaClient);
+      Option<FileSlice> fileSliceOption = sliceView.getLatestMergedFileSliceBeforeOrOn(partition, instantTime, fileId);
+      Map<String, float[]> recordKeyToVectorForPreviousFileSlice;
+      Map<String, float[]> recordKeyToVectorForCurrentFileSlice;
+      if (fileSliceOption.isPresent()) { // if previous file slice is present.
+        recordKeyToSecondaryKeyForPreviousFileSlice =
+            getRecordKeyToSecondaryKey(dataMetaClient, readerContextFactory.getContext(), fileSliceOption.get(), tableSchema, indexDefinition, instantTime, props, false);
+        // branch out based on whether new parquet file is added or log files are added.
+        if (totalParquetFiles.get() > 0) { // new base file/file slice is created in current commit.
+          FileSlice currentFileSliceForFileId = new FileSlice(partition, instantTime, fileId);
+          HoodieWriteStat stat = writeStats.get(0);
+          StoragePathInfo baseFilePathInfo = new StoragePathInfo(new StoragePath(basePath, stat.getPath()), stat.getFileSizeInBytes(), false, (short) 0, 0, 0);
+          currentFileSliceForFileId.setBaseFile(new HoodieBaseFile(baseFilePathInfo));
+          recordKeyToSecondaryKeyForCurrentFileSlice =
+              getRecordKeyToSecondaryKey(dataMetaClient, readerContextFactory.getContext(), currentFileSliceForFileId, tableSchema, indexDefinition, instantTime, props, true);
+        } else { // log files are added in current commit
+          // add new log files to existing latest file slice and compute the secondary index to primary key mapping.
+          FileSlice latestFileSlice = fileSliceOption.get();
+          writeStats.stream().forEach(writeStat -> {
+            StoragePathInfo logFile = new StoragePathInfo(new StoragePath(basePath, writeStat.getPath()), writeStat.getFileSizeInBytes(), false, (short) 0, 0, 0);
+            latestFileSlice.addLogFile(new HoodieLogFile(logFile));
+          });
+          recordKeyToSecondaryKeyForCurrentFileSlice =
+              getRecordKeyToSecondaryKey(dataMetaClient, readerContextFactory.getContext(), latestFileSlice, tableSchema, indexDefinition, instantTime, props, true);
+        }
+      } else { // new file group
+        recordKeyToSecondaryKeyForPreviousFileSlice = Collections.emptyMap(); // previous slice is empty.
+        FileSlice currentFileSliceForFileId = new FileSlice(partition, instantTime, fileId);
+        HoodieWriteStat stat = writeStats.get(0);
+        StoragePathInfo baseFilePathInfo = new StoragePathInfo(new StoragePath(basePath, stat.getPath()), stat.getFileSizeInBytes(), false, (short) 0, 0, 0);
+        currentFileSliceForFileId.setBaseFile(new HoodieBaseFile(baseFilePathInfo));
+        recordKeyToSecondaryKeyForCurrentFileSlice =
+            getRecordKeyToSecondaryKey(dataMetaClient, readerContextFactory.getContext(), currentFileSliceForFileId, tableSchema, indexDefinition, instantTime, props, true);
+      }   // Need to find what secondary index record should be deleted, and what should be inserted.
+      // For each entry in recordKeyToSecondaryKeyForCurrentFileSlice, if it is not present in recordKeyToSecondaryKeyForPreviousFileSlice, then it should be inserted.
+      // For each entry in recordKeyToSecondaryKeyForCurrentFileSlice, if it is present in recordKeyToSecondaryKeyForPreviousFileSlice, then it should be updated.
+      // For each entry in recordKeyToSecondaryKeyForPreviousFileSlice, if it is not present in recordKeyToSecondaryKeyForCurrentFileSlice, then it should be deleted.
+      List<VectorIndexUpdate> records = new ArrayList<>();
+      HoodieFileGroupId fileGroupId = new HoodieFileGroupId(partition, fileId);
+      recordKeyToVectorForCurrentFileSlice.forEach((recordKey, vector) -> {
+        if (!recordKeyToVectorForPreviousFileSlice.containsKey(recordKey)) {
+          records.add(VectorIndexUpdate.builder().recordKey(new HoodieKey(recordKey, partition)).fileGroup(fileGroupId).vector(vector).isDelete(false).build());
+        } else {
+          // only emit update if vector is different to reduce indexing overhead
+          float[] previousVector = recordKeyToVectorForPreviousFileSlice.get(recordKey);
+          if (!Objects.equals(previousVector, vector)) {
+            records.add(VectorIndexUpdate.builder().recordKey(new HoodieKey(recordKey, partition)).fileGroup(fileGroupId).vector(vector).isDelete(false).build());
+          }
+        }
+      });
+      recordKeyToVectorForPreviousFileSlice.forEach((recordKey, vector) -> {
+        if (!recordKeyToVectorForCurrentFileSlice.containsKey(recordKey)) {
+          records.add(VectorIndexUpdate.builder().recordKey(new HoodieKey(recordKey, partition)).fileGroup(fileGroupId).vector(vector).isDelete(true).build());
+        }
+      });
+      return records.iterator();
+    });
+
+    return updateVectorIndex(indexDefinition, dataMetaClient, writeConfig, vectorIndexUpdates);
+  }
+
+  private static HoodieData<HoodieRecord> updateVectorIndex(HoodieIndexDefinition indexDefinition, HoodieTableMetaClient dataMetaClient, HoodieWriteConfig writeConfig,
+                                                            HoodieData<VectorIndexUpdate> vectorIndexUpdates) {
+    VectorIndexShardManager shardManager = new DefaultVectorIndexShardManager();
+    return vectorIndexUpdates
+        .mapToPair(vectorIndexUpdate -> Pair.of(shardManager.getShardId(vectorIndexUpdate.getFileGroup()), vectorIndexUpdate))
+        .groupByKey()
+        .map(shardUpdate -> {
+          String shardKey = shardUpdate.getKey();
+
+          HoodieEngineContext context = new HoodieLocalEngineContext(dataMetaClient.getStorageConf());
+          HoodieTableMetadata metadata = getMetadataTable(writeConfig, dataMetaClient, context);
+          VectorIndex vectorIndex = metadata.getVectorIndex(indexDefinition.getIndexName(), shardKey);
+          if (vectorIndex.isInitialized()) {
+            vectorIndex.updateIndex(shardUpdate.getValue());
+          } else {
+            vectorIndex.createIndex(shardUpdate.getValue());
+          }
+          String checkpoint = vectorIndex.persist();
+
+          List<HoodieFileGroupId> managedFileGroupsForShard = vectorIndex.getManagedFileGroups();
+          List<HoodieVectorIndexMemberInfo> memberInfoList = managedFileGroupsForShard.stream().map(fileGroupId -> {
+            HoodieVectorIndexMemberInfo memberInfo = new HoodieVectorIndexMemberInfo();
+            memberInfo.setPartition(fileGroupId.getPartitionPath());
+            memberInfo.setFileId(fileGroupId.getFileId());
+            return memberInfo;
+          }).collect(Collectors.toList());
+
+          HoodieVectorIndexInfo vectorIndexInfo = new HoodieVectorIndexInfo(shardKey, checkpoint, memberInfoList, null);
+          HoodieKey key = new HoodieKey(shardKey, indexDefinition.getIndexName());
+          return new HoodieAvroRecord(key, new HoodieMetadataPayload(key.getRecordKey(), vectorIndexInfo));
+        });
+  }
+
   private static TableFileSystemView.SliceView getSliceView(HoodieWriteConfig config, HoodieTableMetaClient dataMetaClient) {
     HoodieEngineContext context = new HoodieLocalEngineContext(dataMetaClient.getStorageConf());
     FileSystemViewManager viewManager = FileSystemViewManager.createViewManager(context, config.getMetadataConfig(), config.getViewStorageConfig(),
@@ -271,6 +425,15 @@ public class SecondaryIndexRecordGenerationUtils {
           metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::requestedTime).orElse(""), props, false);
       return new CloseableMappingIterator<>(secondaryIndexGenerator, pair -> createSecondaryIndexRecord(pair.getKey(), pair.getValue(), indexDefinition.getIndexName(), false));
     });
+  }
+
+  public static <T> HoodieData<HoodieRecord> buildInitialVectorIndexFromFileSlices(HoodieEngineContext engineContext,
+                                                                                   List<Pair<String, FileSlice>> partitionFileSlicePairs,
+                                                                                   int secondaryIndexMaxParallelism,
+                                                                                   String activeModule, HoodieTableMetaClient metaClient,
+                                                                                   HoodieIndexDefinition indexDefinition,
+                                                                                   TypedProperties props) {
+    return engineContext.emptyHoodieData();
   }
 
   /**

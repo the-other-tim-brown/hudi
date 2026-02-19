@@ -113,6 +113,9 @@ public enum HoodieIndexVersion {
       case ALL_PARTITIONS:
         return V1;
 
+      case VECTOR_INDEX:
+        return V1;
+
       default:
         throw new HoodieException("Unknown metadata partition type: " + partitionType);
     }

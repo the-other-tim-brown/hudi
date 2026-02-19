@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.expression.Expression;
+import org.apache.hudi.index.vector.VectorIndex;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -161,5 +162,10 @@ class NoOpTableMetadata implements HoodieTableMetadata {
   @Override
   public void close() throws Exception {
 
+  }
+
+  @Override
+  public VectorIndex getVectorIndex(String indexName, String shardKey) {
+    throw new HoodieMetadataException("Unsupported operation: getVectorIndex!");
   }
 }

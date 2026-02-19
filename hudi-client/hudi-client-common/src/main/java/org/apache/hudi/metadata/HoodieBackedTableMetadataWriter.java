@@ -134,6 +134,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetada
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionLatestFileSlicesIncludingInflight;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getProjectedSchemaForExpressionIndex;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getSecondaryIndexPartitionsToInit;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getVectorIndexPartitionsToInit;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.readRecordKeysFromBaseFiles;
 import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
@@ -142,8 +143,11 @@ import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
 import static org.apache.hudi.metadata.MetadataPartitionType.PARTITION_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 import static org.apache.hudi.metadata.MetadataPartitionType.SECONDARY_INDEX;
+import static org.apache.hudi.metadata.MetadataPartitionType.VECTOR_INDEX;
 import static org.apache.hudi.metadata.MetadataPartitionType.fromPartitionPath;
+import static org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils.buildInitialVectorIndexFromFileSlices;
 import static org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils.convertWriteStatsToSecondaryIndexRecords;
+import static org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils.convertWriteStatsToVectorIndexRecords;
 import static org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils.readSecondaryKeysFromFileSlices;
 
 /**
@@ -509,6 +513,18 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
             fileGroupCountAndRecordsPair = initializeSecondaryIndexPartition(relativePartitionPath, lazyLatestMergedPartitionFileSliceList);
             initializeFilegroupsAndCommit(partitionType, relativePartitionPath, fileGroupCountAndRecordsPair, instantTimeForPartition);
             break;
+          case VECTOR_INDEX:
+            Set<String> vectorIndexPartitionsToInit = getVectorIndexPartitionsToInit(partitionType, dataWriteConfig.getMetadataConfig(), dataMetaClient);
+            if (vectorIndexPartitionsToInit.size() != 1) {
+              if (vectorIndexPartitionsToInit.size() > 1) {
+                LOG.warn("Skipping vector index initialization as only one vector index bootstrap at a time is supported for now. Provided: {}", vectorIndexPartitionsToInit);
+              }
+              continue;
+            }
+            relativePartitionPath = vectorIndexPartitionsToInit.iterator().next();
+            fileGroupCountAndRecordsPair = initializeVectorIndexPartition(relativePartitionPath, lazyLatestMergedPartitionFileSliceList);
+            initializeFilegroupsAndCommit(partitionType, relativePartitionPath, fileGroupCountAndRecordsPair, instantTimeForPartition);
+            break;
           default:
             throw new HoodieMetadataException(String.format("Unsupported MDT partition type: %s", partitionType));
         }
@@ -677,6 +693,27 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         RECORD_INDEX_AVERAGE_RECORD_SIZE, dataWriteConfig.getGlobalRecordLevelIndexMinFileGroupCount(),
         dataWriteConfig.getGlobalRecordLevelIndexMaxFileGroupCount(), dataWriteConfig.getRecordIndexGrowthFactor(),
         dataWriteConfig.getRecordIndexMaxFileGroupSizeBytes());
+
+    return Pair.of(fileGroupCount, records);
+  }
+
+  private Pair<Integer, HoodieData<HoodieRecord>> initializeVectorIndexPartition(
+      String indexName, Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList) {
+    HoodieIndexDefinition indexDefinition = getIndexDefinition(indexName);
+    ValidationUtils.checkState(indexDefinition != null, "Secondary Index definition is not present for index " + indexName);
+    List<Pair<String, FileSlice>> partitionFileSlicePairs = lazyLatestMergedPartitionFileSliceList.get();
+
+    int parallelism = Math.min(partitionFileSlicePairs.size(), dataWriteConfig.getMetadataConfig().getSecondaryIndexParallelism());
+    HoodieData<HoodieRecord> records = buildInitialVectorIndexFromFileSlices(
+        engineContext,
+        partitionFileSlicePairs,
+        parallelism,
+        this.getClass().getSimpleName(),
+        dataMetaClient,
+        indexDefinition,
+        dataWriteConfig.getProps());
+
+    final int fileGroupCount = 1; // TODO: what's the logic for determining file group count for vector index?
 
     return Pair.of(fileGroupCount, records);
   }
@@ -1261,6 +1298,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         .reduce(HoodieData::union)
         .get();
 
+    // TODO work from here to define the interface
     // tag records w/ location
     Pair<List<HoodieFileGroupId>, HoodieData<HoodieRecord>> hoodieFileGroupsToUpdateAndTaggedMdtRecords =
         tagRecordsWithLocationForStreamingWrites(processedRecords, mdtPartitionPathsToTag);
@@ -1510,6 +1548,9 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       if (partitionsToUpdate.stream().anyMatch(partition -> partition.startsWith(SECONDARY_INDEX.getPartitionPath()))) {
         updateSecondaryIndexIfPresent(commitMetadata, partitionToRecordMap, instantTime);
       }
+      if (partitionsToUpdate.stream().anyMatch(partition -> partition.startsWith(VECTOR_INDEX.getPartitionPath()))) {
+        updateVectorIndexIfPresent(commitMetadata, partitionToRecordMap, instantTime);
+      }
       return partitionToRecordMap;
     }
   }
@@ -1585,6 +1626,38 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     }
     HoodieIndexDefinition indexDefinition = getIndexDefinition(indexPartition);
     return convertWriteStatsToSecondaryIndexRecords(allWriteStats, instantTime, indexDefinition, dataWriteConfig.getMetadataConfig(), dataMetaClient, engineContext, dataWriteConfig);
+  }
+
+  private void updateVectorIndexIfPresent(HoodieCommitMetadata commitMetadata, Map<String, HoodieData<HoodieRecord>> partitionToRecordMap,
+                                          String instantTime) {
+    boolean vectorIndexMetadataPartitionAvailable = VECTOR_INDEX.isMetadataPartitionAvailable(dataMetaClient);
+    if (!vectorIndexMetadataPartitionAvailable) {
+      return;
+    }
+
+    dataMetaClient.getTableConfig().getMetadataPartitions()
+        .stream()
+        .filter(partition -> partition.startsWith(HoodieTableMetadataUtil.PARTITION_NAME_VECTOR_INDEX_PREFIX))
+        .forEach(partition -> {
+          HoodieData<HoodieRecord> vectorIndexRecords;
+          try {
+            vectorIndexRecords = getVectorIndexUpdates(commitMetadata, partition, instantTime);
+          } catch (Exception e) {
+            throw new HoodieMetadataException("Failed to get vector index updates for partition " + partition, e);
+          }
+          partitionToRecordMap.put(partition, vectorIndexRecords);
+        });
+  }
+
+  private HoodieData<HoodieRecord> getVectorIndexUpdates(HoodieCommitMetadata commitMetadata, String indexPartition, String instantTime) {
+    List<HoodieWriteStat> allWriteStats = commitMetadata.getPartitionToWriteStats().values().stream()
+        .flatMap(Collection::stream).collect(Collectors.toList());
+    // Return early if there are no write stats.
+    if (allWriteStats.isEmpty() || WriteOperationType.isCompactionOrClustering(commitMetadata.getOperationType())) {
+      return engineContext.emptyHoodieData();
+    }
+    HoodieIndexDefinition indexDefinition = getIndexDefinition(indexPartition);
+    return convertWriteStatsToVectorIndexRecords(allWriteStats, instantTime, indexDefinition, dataWriteConfig.getMetadataConfig(), dataMetaClient, engineContext, dataWriteConfig);
   }
 
   /**

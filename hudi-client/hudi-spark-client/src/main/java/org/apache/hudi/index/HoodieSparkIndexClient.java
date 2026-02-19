@@ -65,6 +65,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BL
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_VECTOR_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.existingIndexVersionOrDefault;
 
 @Slf4j
@@ -93,7 +94,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
   public void create(HoodieTableMetaClient metaClient, String userIndexName, String indexType, Map<String, Map<String, String>> columns, Map<String, String> options,
                      Map<String, String> tableProperties) throws Exception {
     if (indexType.equals(PARTITION_NAME_SECONDARY_INDEX) || indexType.equals(PARTITION_NAME_BLOOM_FILTERS)
-        || indexType.equals(PARTITION_NAME_COLUMN_STATS)) {
+        || indexType.equals(PARTITION_NAME_COLUMN_STATS) || indexType.equals(PARTITION_NAME_VECTOR_INDEX)) {
       createExpressionOrSecondaryIndex(metaClient, userIndexName, indexType, columns, options, tableProperties);
     } else {
       createRecordIndex(metaClient, userIndexName, indexType, options);
@@ -163,7 +164,17 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
     log.info("Creating index {}", indexDefinition);
     Option<HoodieIndexDefinition> expressionIndexDefinitionOpt = Option.ofNullable(indexDefinition);
     try (SparkRDDWriteClient writeClient = getWriteClient(metaClient, expressionIndexDefinitionOpt, Option.of(indexType), Collections.emptyMap())) {
-      MetadataPartitionType partitionType = indexType.equals(PARTITION_NAME_SECONDARY_INDEX) ? MetadataPartitionType.SECONDARY_INDEX : MetadataPartitionType.EXPRESSION_INDEX;
+      MetadataPartitionType partitionType;
+      switch (indexType) {
+        case PARTITION_NAME_SECONDARY_INDEX:
+          partitionType = MetadataPartitionType.SECONDARY_INDEX;
+          break;
+        case PARTITION_NAME_VECTOR_INDEX:
+          partitionType = MetadataPartitionType.VECTOR_INDEX;
+          break;
+        default:
+          partitionType = MetadataPartitionType.EXPRESSION_INDEX;
+      }
       // generate index plan
       HoodieIndexVersion currentVersion = HoodieIndexVersion.getCurrentVersion(metaClient.getTableConfig().getTableVersion(), MetadataPartitionType.RECORD_INDEX);
 

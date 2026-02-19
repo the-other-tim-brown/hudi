@@ -499,6 +499,17 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("1.0.1")
       .withDocumentation("Column for which secondary index will be built.");
 
+  public static final ConfigProperty<Boolean> VECTOR_INDEX_ENABLE_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".index.vector.enable")
+      .defaultValue(false)
+      .sinceVersion("1.0.0")
+      .withDocumentation("Enable vector index within the metadata table. "
+          + " When this configuration property is enabled (`true`), the Hudi writer automatically "
+          + " keeps all vector indexes consistent with the data table. "
+          + " When disabled (`false`), all vector indexes are deleted. "
+          + " Note that individual vector index can only be created through a `CREATE INDEX` "
+          + " and deleted through a `DROP INDEX` statement in Spark SQL.");
+
   // Config to specify metadata index to delete
   public static final ConfigProperty<String> DROP_METADATA_INDEX = ConfigProperty
       .key(METADATA_PREFIX + ".index.drop")
@@ -856,6 +867,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     // Secondary index is enabled only iff record index (primary key index) is also enabled and a secondary index column is specified.
     return isGlobalRecordLevelIndexEnabled() && getBoolean(SECONDARY_INDEX_ENABLE_PROP) && StringUtils.nonEmpty(getSecondaryIndexColumn())
         && !isDropMetadataIndex(MetadataPartitionType.SECONDARY_INDEX.getPartitionPath());
+  }
+
+  public boolean isVectorIndexEnabled() {
+    return getBoolean(VECTOR_INDEX_ENABLE_PROP) && !isDropMetadataIndex(MetadataPartitionType.VECTOR_INDEX.getPartitionPath());
   }
 
   public int getSecondaryIndexParallelism() {

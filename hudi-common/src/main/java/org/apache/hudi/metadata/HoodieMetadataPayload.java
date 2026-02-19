@@ -25,6 +25,7 @@ import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
 import org.apache.hudi.avro.model.HoodieSecondaryIndexInfo;
+import org.apache.hudi.avro.model.HoodieVectorIndexInfo;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -49,6 +50,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.util.Lazy;
 
+import lombok.Getter;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -120,6 +122,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   private static final int COLUMN_STATS_METADATA_FIELD_OFFSET = BLOOM_FILTER_METADATA_FIELD_OFFSET + 1;
   private static final int RECORD_INDEX_METADATA_FIELD_OFFSET = COLUMN_STATS_METADATA_FIELD_OFFSET + 1;
   private static final int SECONDARY_INDEX_METADATA_FIELD_OFFSET = RECORD_INDEX_METADATA_FIELD_OFFSET + 1;
+  private static final int VECTOR_INDEX_METADATA_FIELD_OFFSET = SECONDARY_INDEX_METADATA_FIELD_OFFSET + 1;
 
   /**
    * HoodieMetadata schema field ids
@@ -131,6 +134,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   public static final String SCHEMA_FIELD_ID_BLOOM_FILTER = "BloomFilterMetadata";
   public static final String SCHEMA_FIELD_ID_RECORD_INDEX = "recordIndexMetadata";
   public static final String SCHEMA_FIELD_ID_SECONDARY_INDEX = "SecondaryIndexMetadata";
+  public static final String SCHEMA_FIELD_ID_VECTOR_INDEX = "vectorIndexMetadata";
 
   /**
    * HoodieMetadata bloom filter payload field ids
@@ -209,6 +213,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   protected HoodieMetadataColumnStats columnStatMetadata = null;
   protected HoodieRecordIndexInfo recordIndexMetadata;
   protected HoodieSecondaryIndexInfo secondaryIndexMetadata;
+  @Getter
+  protected HoodieVectorIndexInfo vectorIndexMetadata;
   private boolean isDeletedRecord = false;
 
   public HoodieMetadataPayload(@Nullable GenericRecord record, Comparable<?> orderingVal) {
@@ -233,23 +239,27 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   }
 
   protected HoodieMetadataPayload(String key, int type, Map<String, HoodieMetadataFileInfo> filesystemMetadata) {
-    this(key, type, filesystemMetadata, null, null, null, null, false);
+    this(key, type, filesystemMetadata, null, null, null, null, false, null);
   }
 
   protected HoodieMetadataPayload(String key, HoodieMetadataBloomFilter metadataBloomFilter) {
-    this(key, MetadataPartitionType.BLOOM_FILTERS.getRecordType(), null, metadataBloomFilter, null, null, null, metadataBloomFilter.getIsDeleted());
+    this(key, MetadataPartitionType.BLOOM_FILTERS.getRecordType(), null, metadataBloomFilter, null, null, null, metadataBloomFilter.getIsDeleted(), null);
   }
 
   protected HoodieMetadataPayload(String key, HoodieMetadataColumnStats columnStats, int recordType) {
-    this(key, recordType, null, null, columnStats, null, null, columnStats.getIsDeleted());
+    this(key, recordType, null, null, columnStats, null, null, columnStats.getIsDeleted(), null);
   }
 
   private HoodieMetadataPayload(String key, HoodieRecordIndexInfo recordIndexMetadata) {
-    this(key, MetadataPartitionType.RECORD_INDEX.getRecordType(), null, null, null, recordIndexMetadata, null, false);
+    this(key, MetadataPartitionType.RECORD_INDEX.getRecordType(), null, null, null, recordIndexMetadata, null, false, null);
   }
 
   protected HoodieMetadataPayload(String key, HoodieSecondaryIndexInfo secondaryIndexMetadata) {
-    this(key, MetadataPartitionType.SECONDARY_INDEX.getRecordType(), null, null, null, null, secondaryIndexMetadata, secondaryIndexMetadata.getIsDeleted());
+    this(key, MetadataPartitionType.SECONDARY_INDEX.getRecordType(), null, null, null, null, secondaryIndexMetadata, secondaryIndexMetadata.getIsDeleted(), null);
+  }
+
+  protected HoodieMetadataPayload(String key, HoodieVectorIndexInfo vectorIndexMetadata) {
+    this(key, MetadataPartitionType.VECTOR_INDEX.getRecordType(), null, null, null, null, null, false, vectorIndexMetadata);
   }
 
   protected HoodieMetadataPayload(String key, int type,
@@ -258,7 +268,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
                                   HoodieMetadataColumnStats columnStats,
                                   HoodieRecordIndexInfo recordIndexMetadata,
                                   HoodieSecondaryIndexInfo secondaryIndexMetadata,
-                                  boolean isDeletedRecord) {
+                                  boolean isDeletedRecord,
+                                  HoodieVectorIndexInfo vectorIndexMetadata) {
     this.key = key;
     this.type = type;
     this.filesystemMetadata = filesystemMetadata;
@@ -266,6 +277,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     this.columnStatMetadata = columnStats;
     this.recordIndexMetadata = recordIndexMetadata;
     this.secondaryIndexMetadata = secondaryIndexMetadata;
+    this.vectorIndexMetadata = vectorIndexMetadata;
     this.isDeletedRecord = isDeletedRecord;
   }
 
@@ -422,7 +434,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     if (schema == null || schema == HOODIE_METADATA_AVRO_SCHEMA) {
       // If the schema is same or none is provided, we can return the record directly
       HoodieMetadataRecord record = new HoodieMetadataRecord(key, type, filesystemMetadata, bloomFilterMetadata,
-          columnStatMetadata, recordIndexMetadata, secondaryIndexMetadata);
+          columnStatMetadata, recordIndexMetadata, secondaryIndexMetadata, vectorIndexMetadata);
       return Option.of(record);
     } else {
       // Otherwise, the assumption is that the schema required contains the metadata fields so we construct a new GenericRecord with these fields
@@ -443,6 +455,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       }
       if (secondaryIndexMetadata != null) {
         record.put(SECONDARY_INDEX_METADATA_FIELD_OFFSET, secondaryIndexMetadata);
+      }
+      if (vectorIndexMetadata != null) {
+        record.put(VECTOR_INDEX_METADATA_FIELD_OFFSET, vectorIndexMetadata);
       }
       return Option.of(record);
     }

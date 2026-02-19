@@ -47,6 +47,7 @@ import static org.apache.hudi.common.model.WriteConcurrencyMode.OPTIMISTIC_CONCU
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_VECTOR_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataPartition;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightAndCompletedMetadataPartitions;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getSecondaryOrExpressionIndexName;
@@ -93,6 +94,9 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
         return getSecondaryOrExpressionIndexName(metadataConfig::getExpressionIndexName, PARTITION_NAME_EXPRESSION_INDEX_PREFIX, metadataConfig.getExpressionIndexColumn());
       } else if (MetadataPartitionType.SECONDARY_INDEX.equals(p)) {
         return getSecondaryOrExpressionIndexName(metadataConfig::getSecondaryIndexName, PARTITION_NAME_SECONDARY_INDEX_PREFIX, metadataConfig.getSecondaryIndexColumn());
+      } else if (MetadataPartitionType.VECTOR_INDEX.equals(p)) {
+        // TODO: update this?
+        return getSecondaryOrExpressionIndexName(metadataConfig::getExpressionIndexName, PARTITION_NAME_VECTOR_INDEX_PREFIX, metadataConfig.getSecondaryIndexColumn());
       }
       return p.getPartitionPath();
     }).collect(Collectors.toSet());
@@ -113,6 +117,8 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
             partitionName = getSecondaryOrExpressionIndexName(metadataConfig::getExpressionIndexName, PARTITION_NAME_EXPRESSION_INDEX_PREFIX, metadataConfig.getExpressionIndexColumn());
           } else if (MetadataPartitionType.SECONDARY_INDEX.equals(p)) {
             partitionName = getSecondaryOrExpressionIndexName(metadataConfig::getSecondaryIndexName, PARTITION_NAME_SECONDARY_INDEX_PREFIX, metadataConfig.getSecondaryIndexColumn());
+          } else if (MetadataPartitionType.VECTOR_INDEX.equals(p)) {
+            partitionName = getSecondaryOrExpressionIndexName(metadataConfig::getExpressionIndexName, PARTITION_NAME_VECTOR_INDEX_PREFIX, metadataConfig.getSecondaryIndexColumn());
           } else {
             partitionName = p.getPartitionPath();
           }
@@ -150,6 +156,10 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
     }
     if (MetadataPartitionType.SECONDARY_INDEX.equals(partitionType)) {
       partitionName = getSecondaryOrExpressionIndexName(metadataConfig::getSecondaryIndexName, PARTITION_NAME_SECONDARY_INDEX_PREFIX, metadataConfig.getSecondaryIndexColumn());
+    }
+    if (MetadataPartitionType.VECTOR_INDEX.equals(partitionType)) {
+      // TODO: update this?
+      partitionName = getSecondaryOrExpressionIndexName(metadataConfig::getExpressionIndexName, PARTITION_NAME_VECTOR_INDEX_PREFIX, metadataConfig.getSecondaryIndexColumn());
     }
     return new HoodieIndexPartitionInfo(LATEST_INDEX_PLAN_VERSION, partitionName, indexUptoInstant.requestedTime(), Collections.emptyMap());
   }

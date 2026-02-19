@@ -101,6 +101,8 @@ import static org.apache.hudi.index.expression.HoodieExpressionIndex.IDENTITY_TR
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_VECTOR_INDEX;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_VECTOR_INDEX_PREFIX;
 import static org.apache.hudi.table.action.commit.HoodieDeleteHelper.createDeleteRecord;
 
 /**
@@ -645,13 +647,22 @@ public class HoodieIndexUtils {
 
   static HoodieIndexDefinition getSecondaryOrExpressionIndexDefinition(HoodieTableMetaClient metaClient, String userIndexName, String indexType, Map<String, Map<String, String>> columns,
                                                                        Map<String, String> options, Map<String, String> tableProperties) throws Exception {
-    String fullIndexName = indexType.equals(PARTITION_NAME_SECONDARY_INDEX)
-        ? PARTITION_NAME_SECONDARY_INDEX_PREFIX + userIndexName
-        : PARTITION_NAME_EXPRESSION_INDEX_PREFIX + userIndexName;
     HoodieTableVersion tableVersion = metaClient.getTableConfig().getTableVersion();
-    HoodieIndexVersion indexVersion = indexType.equals(PARTITION_NAME_SECONDARY_INDEX)
-        ? HoodieIndexVersion.getCurrentVersion(tableVersion, MetadataPartitionType.SECONDARY_INDEX)
-        : HoodieIndexVersion.getCurrentVersion(tableVersion, MetadataPartitionType.EXPRESSION_INDEX);
+    String fullIndexName;
+    HoodieIndexVersion indexVersion;
+    switch (indexType) {
+      case PARTITION_NAME_SECONDARY_INDEX:
+        fullIndexName = PARTITION_NAME_SECONDARY_INDEX_PREFIX + userIndexName;
+        indexVersion = HoodieIndexVersion.getCurrentVersion(tableVersion, MetadataPartitionType.SECONDARY_INDEX);
+        break;
+      case PARTITION_NAME_VECTOR_INDEX:
+        fullIndexName = PARTITION_NAME_VECTOR_INDEX_PREFIX + userIndexName;
+        indexVersion = HoodieIndexVersion.getCurrentVersion(tableVersion, MetadataPartitionType.VECTOR_INDEX);
+        break;
+      default:
+        fullIndexName = PARTITION_NAME_EXPRESSION_INDEX_PREFIX + userIndexName;
+        indexVersion = HoodieIndexVersion.getCurrentVersion(tableVersion, MetadataPartitionType.EXPRESSION_INDEX);
+    }
     if (indexExists(metaClient, fullIndexName)) {
       throw new HoodieMetadataIndexException("Index already exists: " + userIndexName);
     }
@@ -699,9 +710,9 @@ public class HoodieIndexUtils {
         String actualType = fieldSchema.getType().toString();
         throw new HoodieMetadataIndexException(String.format(
             "Cannot create secondary index '%s': Column '%s' has unsupported data type '%s'. "
-            + "Secondary indexes only support: STRING, CHAR, INT, BIGINT/LONG, SMALLINT, TINYINT, "
-            + "FLOAT, DOUBLE, TIMESTAMP (including logical types timestampMillis, timestampMicros), "
-            + "and DATE types. Please choose a column with one of these supported types.",
+                + "Secondary indexes only support: STRING, CHAR, INT, BIGINT/LONG, SMALLINT, TINYINT, "
+                + "FLOAT, DOUBLE, TIMESTAMP (including logical types timestampMillis, timestampMicros), "
+                + "and DATE types. Please choose a column with one of these supported types.",
             userIndexName, columnName, actualType));
       }
 
@@ -715,9 +726,16 @@ public class HoodieIndexUtils {
       if (!hasRecordIndex && !recordIndexEnabled) {
         throw new HoodieMetadataIndexException(String.format(
             "Cannot create secondary index '%s': Record index is required for secondary indexes but is not enabled. "
-            + "Please enable the record index by setting '%s' to 'true' in the index creation options, "
-            + "or create a record index first using: CREATE INDEX record_index ON %s USING record_index",
+                + "Please enable the record index by setting '%s' to 'true' in the index creation options, "
+                + "or create a record index first using: CREATE INDEX record_index ON %s USING record_index",
             userIndexName, GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), metaClient.getTableConfig().getTableName()));
+      }
+    } else if (indexType.equals(PARTITION_NAME_VECTOR_INDEX)) {
+      if (fieldSchema.getNonNullType().getType() != HoodieSchemaType.ARRAY) {
+        throw new HoodieMetadataIndexException(String.format(
+            "Cannot create vector index '%s': Column '%s' has unsupported data type '%s'. "
+                + "Vector indexes only support ARRAY types. Please choose a column with ARRAY type.",
+            userIndexName, columnName, fieldSchema.getType()));
       }
     } else {
       // Expression Index Validation: Loose Deny-List/Blacklist
