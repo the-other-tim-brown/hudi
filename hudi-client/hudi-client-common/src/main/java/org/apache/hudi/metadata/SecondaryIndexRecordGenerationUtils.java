@@ -73,6 +73,7 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
@@ -269,16 +270,16 @@ public class SecondaryIndexRecordGenerationUtils {
       Map<String, float[]> recordKeyToVectorForPreviousFileSlice;
       Map<String, float[]> recordKeyToVectorForCurrentFileSlice;
       if (fileSliceOption.isPresent()) { // if previous file slice is present.
-        recordKeyToSecondaryKeyForPreviousFileSlice =
-            getRecordKeyToSecondaryKey(dataMetaClient, readerContextFactory.getContext(), fileSliceOption.get(), tableSchema, indexDefinition, instantTime, props, false);
+        recordKeyToVectorForPreviousFileSlice =
+            getRecordKeyToVector(dataMetaClient, readerContextFactory.getContext(), fileSliceOption.get(), tableSchema, indexDefinition, instantTime, props, false);
         // branch out based on whether new parquet file is added or log files are added.
         if (totalParquetFiles.get() > 0) { // new base file/file slice is created in current commit.
           FileSlice currentFileSliceForFileId = new FileSlice(partition, instantTime, fileId);
           HoodieWriteStat stat = writeStats.get(0);
           StoragePathInfo baseFilePathInfo = new StoragePathInfo(new StoragePath(basePath, stat.getPath()), stat.getFileSizeInBytes(), false, (short) 0, 0, 0);
           currentFileSliceForFileId.setBaseFile(new HoodieBaseFile(baseFilePathInfo));
-          recordKeyToSecondaryKeyForCurrentFileSlice =
-              getRecordKeyToSecondaryKey(dataMetaClient, readerContextFactory.getContext(), currentFileSliceForFileId, tableSchema, indexDefinition, instantTime, props, true);
+          recordKeyToVectorForCurrentFileSlice =
+              getRecordKeyToVector(dataMetaClient, readerContextFactory.getContext(), currentFileSliceForFileId, tableSchema, indexDefinition, instantTime, props, true);
         } else { // log files are added in current commit
           // add new log files to existing latest file slice and compute the secondary index to primary key mapping.
           FileSlice latestFileSlice = fileSliceOption.get();
@@ -286,17 +287,17 @@ public class SecondaryIndexRecordGenerationUtils {
             StoragePathInfo logFile = new StoragePathInfo(new StoragePath(basePath, writeStat.getPath()), writeStat.getFileSizeInBytes(), false, (short) 0, 0, 0);
             latestFileSlice.addLogFile(new HoodieLogFile(logFile));
           });
-          recordKeyToSecondaryKeyForCurrentFileSlice =
-              getRecordKeyToSecondaryKey(dataMetaClient, readerContextFactory.getContext(), latestFileSlice, tableSchema, indexDefinition, instantTime, props, true);
+          recordKeyToVectorForCurrentFileSlice =
+              getRecordKeyToVector(dataMetaClient, readerContextFactory.getContext(), latestFileSlice, tableSchema, indexDefinition, instantTime, props, true);
         }
       } else { // new file group
-        recordKeyToSecondaryKeyForPreviousFileSlice = Collections.emptyMap(); // previous slice is empty.
+        recordKeyToVectorForPreviousFileSlice = Collections.emptyMap(); // previous slice is empty.
         FileSlice currentFileSliceForFileId = new FileSlice(partition, instantTime, fileId);
         HoodieWriteStat stat = writeStats.get(0);
         StoragePathInfo baseFilePathInfo = new StoragePathInfo(new StoragePath(basePath, stat.getPath()), stat.getFileSizeInBytes(), false, (short) 0, 0, 0);
         currentFileSliceForFileId.setBaseFile(new HoodieBaseFile(baseFilePathInfo));
-        recordKeyToSecondaryKeyForCurrentFileSlice =
-            getRecordKeyToSecondaryKey(dataMetaClient, readerContextFactory.getContext(), currentFileSliceForFileId, tableSchema, indexDefinition, instantTime, props, true);
+        recordKeyToVectorForCurrentFileSlice =
+            getRecordKeyToVector(dataMetaClient, readerContextFactory.getContext(), currentFileSliceForFileId, tableSchema, indexDefinition, instantTime, props, true);
       }   // Need to find what secondary index record should be deleted, and what should be inserted.
       // For each entry in recordKeyToSecondaryKeyForCurrentFileSlice, if it is not present in recordKeyToSecondaryKeyForPreviousFileSlice, then it should be inserted.
       // For each entry in recordKeyToSecondaryKeyForCurrentFileSlice, if it is present in recordKeyToSecondaryKeyForPreviousFileSlice, then it should be updated.
@@ -370,18 +371,37 @@ public class SecondaryIndexRecordGenerationUtils {
   }
 
   public static <T> Map<String, String> getRecordKeyToSecondaryKey(HoodieTableMetaClient metaClient,
-                                                                    HoodieReaderContext<T> readerContext,
-                                                                    FileSlice fileSlice,
-                                                                    HoodieSchema tableSchema,
-                                                                    HoodieIndexDefinition indexDefinition,
-                                                                    String instantTime,
-                                                                    TypedProperties props,
-                                                                    boolean allowInflightInstants) throws IOException {
+                                                                   HoodieReaderContext<T> readerContext,
+                                                                   FileSlice fileSlice,
+                                                                   HoodieSchema tableSchema,
+                                                                   HoodieIndexDefinition indexDefinition,
+                                                                   String instantTime,
+                                                                   TypedProperties props,
+                                                                   boolean allowInflightInstants) throws IOException {
     Map<String, String> recordKeyToSecondaryKey = new HashMap<>();
     try (ClosableIterator<Pair<String, String>> recordKeyAndSecondaryIndexValueIter =
-             createSecondaryIndexRecordGenerator(readerContext, metaClient, fileSlice, tableSchema, indexDefinition, instantTime, props, allowInflightInstants)) {
+             createSecondaryIndexRecordGenerator(readerContext, metaClient, fileSlice, tableSchema, indexDefinition, instantTime, props, allowInflightInstants, Object::toString)) {
       while (recordKeyAndSecondaryIndexValueIter.hasNext()) {
         Pair<String, String> recordKeyAndSecondaryIndexValue = recordKeyAndSecondaryIndexValueIter.next();
+        recordKeyToSecondaryKey.put(recordKeyAndSecondaryIndexValue.getKey(), recordKeyAndSecondaryIndexValue.getValue());
+      }
+    }
+    return recordKeyToSecondaryKey;
+  }
+
+  public static <T> Map<String, float[]> getRecordKeyToVector(HoodieTableMetaClient metaClient,
+                                                              HoodieReaderContext<T> readerContext,
+                                                              FileSlice fileSlice,
+                                                              HoodieSchema tableSchema,
+                                                              HoodieIndexDefinition indexDefinition,
+                                                              String instantTime,
+                                                              TypedProperties props,
+                                                              boolean allowInflightInstants) throws IOException {
+    Map<String, float[]> recordKeyToSecondaryKey = new HashMap<>();
+    try (ClosableIterator<Pair<String, float[]>> recordKeyAndSecondaryIndexValueIter =
+             createSecondaryIndexRecordGenerator(readerContext, metaClient, fileSlice, tableSchema, indexDefinition, instantTime, props, allowInflightInstants, o -> (float[]) o)) {
+      while (recordKeyAndSecondaryIndexValueIter.hasNext()) {
+        Pair<String, float[]> recordKeyAndSecondaryIndexValue = recordKeyAndSecondaryIndexValueIter.next();
         recordKeyToSecondaryKey.put(recordKeyAndSecondaryIndexValue.getKey(), recordKeyAndSecondaryIndexValue.getValue());
       }
     }
@@ -422,7 +442,7 @@ public class SecondaryIndexRecordGenerationUtils {
       }
       ClosableIterator<Pair<String, String>> secondaryIndexGenerator = createSecondaryIndexRecordGenerator(
           readerContextFactory.getContext(), metaClient, fileSlice, readerSchema, indexDefinition,
-          metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::requestedTime).orElse(""), props, false);
+          metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::requestedTime).orElse(""), props, false, Object::toString);
       return new CloseableMappingIterator<>(secondaryIndexGenerator, pair -> createSecondaryIndexRecord(pair.getKey(), pair.getValue(), indexDefinition.getIndexName(), false));
     });
   }
@@ -432,21 +452,56 @@ public class SecondaryIndexRecordGenerationUtils {
                                                                                    int secondaryIndexMaxParallelism,
                                                                                    String activeModule, HoodieTableMetaClient metaClient,
                                                                                    HoodieIndexDefinition indexDefinition,
-                                                                                   TypedProperties props) {
-    return engineContext.emptyHoodieData();
+                                                                                   HoodieWriteConfig writeConfig) {
+    if (partitionFileSlicePairs.isEmpty()) {
+      return engineContext.emptyHoodieData();
+    }
+    final int parallelism = Math.min(partitionFileSlicePairs.size(), secondaryIndexMaxParallelism);
+    final StoragePath basePath = metaClient.getBasePath();
+    HoodieSchema tableSchema;
+    try {
+      tableSchema = new TableSchemaResolver(metaClient).getTableSchema();
+    } catch (Exception e) {
+      throw new HoodieException("Failed to get latest schema for " + metaClient.getBasePath(), e);
+    }
+    ReaderContextFactory<T> readerContextFactory = engineContext.getReaderContextFactory(metaClient);
+    engineContext.setJobStatus(activeModule, "Secondary Index: reading secondary keys from " + partitionFileSlicePairs.size() + " file slices");
+    HoodieFileFormat baseFileFormat = metaClient.getTableConfig().getBaseFileFormat();
+    HoodieData<VectorIndexUpdate> vectorIndexData =  engineContext.parallelize(partitionFileSlicePairs, parallelism).flatMap(partitionAndBaseFile -> {
+      final String partition = partitionAndBaseFile.getKey();
+      final FileSlice fileSlice = partitionAndBaseFile.getValue();
+      Option<StoragePath> dataFilePath = Option.ofNullable(fileSlice.getBaseFile().map(baseFile -> FSUtils.getAbsoluteFilePath(basePath, partition, baseFile.getFileName())).orElseGet(null));
+      HoodieSchema readerSchema;
+      if (dataFilePath.isPresent()) {
+        readerSchema = HoodieIOFactory.getIOFactory(metaClient.getStorage())
+            .getFileFormatUtils(baseFileFormat)
+            .readSchema(metaClient.getStorage(), dataFilePath.get());
+      } else {
+        readerSchema = tableSchema;
+      }
+      ClosableIterator<Pair<String, float[]>> secondaryIndexGenerator = createSecondaryIndexRecordGenerator(
+          readerContextFactory.getContext(), metaClient, fileSlice, readerSchema, indexDefinition,
+          metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::requestedTime).orElse(""), writeConfig.getProps(), false, o -> (float[]) o);
+      return new CloseableMappingIterator<>(secondaryIndexGenerator, pair -> {
+        HoodieKey recordKey = new HoodieKey(pair.getKey(), partition);
+        return VectorIndexUpdate.builder().recordKey(recordKey).fileGroup(fileSlice.getFileGroupId()).vector(pair.getValue()).isDelete(false).build();
+      });
+    });
+    return updateVectorIndex(indexDefinition, metaClient, writeConfig, vectorIndexData);
   }
 
   /**
    * Constructs an iterator with a pair of the record key and the secondary index value for each record in the file slice.
    */
-  private static <T> ClosableIterator<Pair<String, String>> createSecondaryIndexRecordGenerator(HoodieReaderContext<T> readerContext,
-                                                                                                HoodieTableMetaClient metaClient,
-                                                                                                FileSlice fileSlice,
-                                                                                                HoodieSchema tableSchema,
-                                                                                                HoodieIndexDefinition indexDefinition,
-                                                                                                String instantTime,
-                                                                                                TypedProperties props,
-                                                                                                boolean allowInflightInstants) throws IOException {
+  private static <T, V> ClosableIterator<Pair<String, V>> createSecondaryIndexRecordGenerator(HoodieReaderContext<T> readerContext,
+                                                                                              HoodieTableMetaClient metaClient,
+                                                                                              FileSlice fileSlice,
+                                                                                              HoodieSchema tableSchema,
+                                                                                              HoodieIndexDefinition indexDefinition,
+                                                                                              String instantTime,
+                                                                                              TypedProperties props,
+                                                                                              boolean allowInflightInstants,
+                                                                                              Function<Object, V> converter) throws IOException {
     String secondaryKeyField = indexDefinition.getSourceFieldsKey();
     HoodieSchema requestedSchema = getRequestedSchemaForSecondaryIndex(metaClient, tableSchema, secondaryKeyField);
     HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>newBuilder()
@@ -460,9 +515,9 @@ public class SecondaryIndexRecordGenerationUtils {
         .withAllowInflightInstants(allowInflightInstants)
         .build();
 
-    return new ClosableIterator<Pair<String, String>>() {
+    return new ClosableIterator<Pair<String, V>>() {
       private final ClosableIterator<T> recordIterator = fileGroupReader.getClosableIterator();
-      private Pair<String, String> nextValidRecord;
+      private Pair<String, V> nextValidRecord;
 
       @Override
       public void close() {
@@ -478,10 +533,10 @@ public class SecondaryIndexRecordGenerationUtils {
 
         while (recordIterator.hasNext()) {
           T record = recordIterator.next();
-          Object secondaryKey = readerContext.getRecordContext().getValue(record, requestedSchema, secondaryKeyField);
+          Object secondaryKey = readerContext.getRecordContext().getValueAsJava(record, requestedSchema, secondaryKeyField);
             nextValidRecord = Pair.of(
                 readerContext.getRecordContext().getRecordKey(record, requestedSchema),
-                secondaryKey == null ? null : secondaryKey.toString()
+                secondaryKey == null ? null : converter.apply(secondaryKey)
             );
           return true;
         }
@@ -491,11 +546,11 @@ public class SecondaryIndexRecordGenerationUtils {
       }
 
       @Override
-      public Pair<String, String> next() {
+      public Pair<String, V> next() {
         if (!hasNext()) {
           throw new NoSuchElementException("No more valid records available.");
         }
-        Pair<String, String> result = nextValidRecord;
+        Pair<String, V> result = nextValidRecord;
         nextValidRecord = null;  // Reset for the next call
         return result;
       }

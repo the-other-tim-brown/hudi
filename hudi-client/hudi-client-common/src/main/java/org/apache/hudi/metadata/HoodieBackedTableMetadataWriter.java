@@ -711,7 +711,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         this.getClass().getSimpleName(),
         dataMetaClient,
         indexDefinition,
-        dataWriteConfig.getProps());
+        dataWriteConfig);
 
     final int fileGroupCount = 1; // TODO: what's the logic for determining file group count for vector index?
 

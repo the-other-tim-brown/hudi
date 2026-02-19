@@ -195,6 +195,11 @@ public abstract class RecordContext<T> implements Serializable {
    */
   public abstract Object getValue(T record, HoodieSchema schema, String fieldName);
 
+  public Object getValueAsJava(T record, HoodieSchema schema, String fieldName) {
+    // TODO: need to see if we have some other way of doing this
+    return getValue(record, schema, fieldName);
+  }
+
   /**
    * Get value of metadata field in a more efficient way than #getValue.
    *

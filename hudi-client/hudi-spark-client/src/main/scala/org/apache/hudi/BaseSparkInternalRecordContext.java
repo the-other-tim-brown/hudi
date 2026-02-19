@@ -35,6 +35,7 @@ import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
+import org.apache.spark.sql.catalyst.expressions.UnsafeArrayData;
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.types.Decimal;
@@ -94,6 +95,10 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
       return ((Decimal) value).toJavaBigDecimal();
     } else if (value instanceof byte[]) {
       return ByteBuffer.wrap((byte[]) value);
+    } else if (value instanceof UnsafeArrayData) {
+      // todo: hardcoded for now
+      UnsafeArrayData unsafeArrayData = (UnsafeArrayData) value;
+      return unsafeArrayData.toFloatArray();
     } else if (value instanceof CalendarInterval
         || value instanceof InternalRow
         || value instanceof org.apache.spark.sql.catalyst.util.MapData
@@ -107,6 +112,11 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
   @Override
   public Object getValue(InternalRow row, HoodieSchema schema, String fieldName) {
     return getFieldValueFromInternalRow(row, schema, fieldName);
+  }
+
+  @Override
+  public Object getValueAsJava(InternalRow row, HoodieSchema schema, String fieldName) {
+    return getFieldValueFromInternalRowAsJava(row, schema, fieldName);
   }
 
   @Override

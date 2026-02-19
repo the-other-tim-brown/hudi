@@ -21,6 +21,8 @@ package org.apache.hudi.index.vector;
 
 import org.apache.hudi.common.model.HoodieFileGroupId;
 
-public interface VectorIndexShardManager {
+import java.io.Serializable;
+
+public interface VectorIndexShardManager extends Serializable {
   String getShardId(HoodieFileGroupId fileGroupId);
 }

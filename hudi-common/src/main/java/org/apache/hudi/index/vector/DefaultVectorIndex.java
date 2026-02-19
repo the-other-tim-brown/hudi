@@ -48,7 +48,7 @@ public class DefaultVectorIndex implements VectorIndex {
 
   @Override
   public String persist() {
-    return null;
+    return "/tmp/1";
   }
 
   @Override

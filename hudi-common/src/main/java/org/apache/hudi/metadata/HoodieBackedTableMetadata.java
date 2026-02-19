@@ -853,10 +853,16 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   @Override
   public VectorIndex getVectorIndex(String indexName, String shardKey) {
-    List<HoodieMetadataPayload> results = readIndexRecords(HoodieListData.eager(Collections.singletonList(new VectorIndexRawKey(shardKey))), indexName, Option.empty())
-        .map(HoodieRecord::getData)
-        .collectAsList();
-    HoodieVectorIndexInfo vectorIndexInfo = results.isEmpty() ? null : results.get(0).getVectorIndexMetadata();
+    // inspect the state of the vector index file slices to determine if the index exists and if it is empty before attempting to read from it.
+    List<FileSlice> fileSlices = partitionFileSliceMap.computeIfAbsent(indexName,
+        k -> HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, getMetadataFileSystemView(), indexName));
+    HoodieVectorIndexInfo vectorIndexInfo = null;
+    if (!fileSlices.isEmpty()) {
+      List<HoodieMetadataPayload> results = readIndexRecords(HoodieListData.eager(Collections.singletonList(new VectorIndexRawKey(shardKey))), indexName, Option.empty())
+          .map(HoodieRecord::getData)
+          .collectAsList();
+      vectorIndexInfo = results.isEmpty() ? null : results.get(0).getVectorIndexMetadata();
+    }
     // TODO make factory pluggable
     return new DefaultVectorIndexFactory().createVectorIndex(vectorIndexInfo, shardKey, metadataMetaClient.getBasePath());
   }
